@@ -40,6 +40,7 @@ function HeadDashboard({
   const [users, setUsers] = useState([]);
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [newName, setNewName] = useState("");
   const [assignedSections, setAssignedSections] = useState("");
 
   const [filterSection, setFilterSection] = useState("All");
@@ -747,8 +748,8 @@ function HeadDashboard({
   };
 
   const addUser = async () => {
-    if (!newUsername || !newPassword) {
-      showToast("Please fill in username and password", "error");
+    if (!newUsername || !newPassword || !newName) {
+      showToast("Please fill in username, password, and name", "error");
       return;
     }
 
@@ -760,6 +761,7 @@ function HeadDashboard({
         body: JSON.stringify({
           username: newUsername,
           password: newPassword,
+          name: newName,
           role: "reviewer",
           assignedSections: assignedSections
             .split(",")
@@ -772,6 +774,7 @@ function HeadDashboard({
         await loadUsers();
         setNewUsername("");
         setNewPassword("");
+        setNewName("");
         setAssignedSections("");
         showToast("User added successfully!");
       } else {
@@ -1446,7 +1449,14 @@ function HeadDashboard({
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
                 Add New Reviewer
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Full Name"
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
                 <input
                   type="text"
                   value={newUsername}
@@ -1510,25 +1520,12 @@ function HeadDashboard({
             <div className="bg-gray-50 p-6 rounded-lg">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-lg font-semibold text-gray-700">
-                  Current Users:
+                  Reviewers:
                 </h4>
-                <select
-                  value={userFilter}
-                  onChange={(e) => setUserFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Users</option>
-                  <option value="reviewer">Reviewers Only</option>
-                  <option value="student">Students Only</option>
-                </select>
               </div>
               <div className="space-y-3">
                 {users
-                  .filter(
-                    (u) =>
-                      u.role !== "head" &&
-                      (userFilter === "all" || u.role === userFilter)
-                  )
+                  .filter((u) => u.role === "reviewer")
                   .map((user) => (
                     <div
                       key={user._id}
@@ -1537,17 +1534,13 @@ function HeadDashboard({
                       <div className="flex justify-between items-start">
                         <div>
                           <span className="text-gray-700 font-medium">
-                            {user.username}
+                            {user.name || user.username}
                           </span>
-                          <span className="ml-2 px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                            {user.role}
+                          <span className="ml-2 text-sm text-gray-500">
+                            ({user.username})
                           </span>
                           <div className="text-sm text-gray-600 mt-1">
-                            {user.role === "reviewer"
-                              ? `Sections: ${
-                                  user.assignedSections?.join(", ") || "None"
-                                }`
-                              : `Batch: ${user.assignedBatch || "None"}`}
+                            Sections: {user.assignedSections?.join(", ") || "None"}
                           </div>
                         </div>
                         <button
