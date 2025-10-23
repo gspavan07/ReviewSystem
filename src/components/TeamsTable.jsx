@@ -1,4 +1,13 @@
 import { useState, useEffect } from "react";
+import {
+  FaChevronDown,
+  FaChevronRight,
+  FaUser,
+  FaTrash,
+  FaUnlock,
+  FaLock,
+  FaCheck,
+} from "react-icons/fa";
 
 function TeamsTable({
   teams,
@@ -21,7 +30,7 @@ function TeamsTable({
     // Initialize absent members from saved data
     if (activeReview && teams.length > 0) {
       const savedAbsent = {};
-      teams.forEach(team => {
+      teams.forEach((team) => {
         const absentData = team.reviewData?.[activeReview._id]?._absentMembers;
         if (absentData) {
           savedAbsent[team._id] = absentData;
@@ -71,7 +80,7 @@ function TeamsTable({
       if (member) {
         // Check if member is marked as absent
         const savedAbsent = reviewData._absentMembers?.[member];
-        if (savedAbsent) return 'Absent';
+        if (savedAbsent) return "Absent";
         return reviewData[column.name]?.[member] || "";
       }
       return reviewData[column.name] || "";
@@ -80,24 +89,34 @@ function TeamsTable({
 
   const isAbsentFromSavedData = (teamId, member) => {
     if (!activeReview) return false;
-    const team = teams.find(t => t._id === teamId);
-    return team?.reviewData?.[activeReview._id]?._absentMembers?.[member] || false;
+    const team = teams.find((t) => t._id === teamId);
+    return (
+      team?.reviewData?.[activeReview._id]?._absentMembers?.[member] || false
+    );
   };
 
-  const deleteTeam = async (teamId) => {
-    if (confirm("Are you sure you want to delete this team?")) {
-      try {
-        const response = await fetch(`/api/teams/${teamId}`, {
-          method: "DELETE",
-        });
+  const calculateMemberTotal = (team, member) => {
+    if (!activeReview) return 0;
 
-        if (response.ok) {
-          await onDataChange();
+    // Check if member is absent
+    const isAbsent =
+      absentMembers[team._id]?.[member] !== undefined
+        ? absentMembers[team._id][member]
+        : isAbsentFromSavedData(team._id, member);
+
+    if (isAbsent) return "Absent";
+
+    let total = 0;
+    customColumns.forEach((col) => {
+      if (col.type === "individual" && col.inputType === "number") {
+        const value = getDisplayValue(team, col, member);
+        const numValue = parseFloat(value);
+        if (!isNaN(numValue)) {
+          total += numValue;
         }
-      } catch (error) {
-        alert("Error deleting team");
       }
-    }
+    });
+    return total;
   };
 
   const updateTeamStatus = async (teamId, field, status) => {
@@ -211,11 +230,17 @@ function TeamsTable({
   const toggleAbsent = (teamId, member) => {
     const currentSavedStatus = isAbsentFromSavedData(teamId, member);
     const currentPendingStatus = absentMembers[teamId]?.[member];
-    
-    // If saved as absent, toggling should mark as present (false)
-    // If not saved as absent, toggle the pending status
-    const newStatus = currentSavedStatus ? false : !currentPendingStatus;
-    
+
+    // Determine the new status based on current state
+    let newStatus;
+    if (currentSavedStatus) {
+      // If saved as absent, toggle to present (false) or back to absent (true)
+      newStatus = currentPendingStatus === false ? true : false;
+    } else {
+      // If not saved as absent, toggle the pending status
+      newStatus = !currentPendingStatus;
+    }
+
     setAbsentMembers((prev) => ({
       ...prev,
       [teamId]: {
@@ -234,7 +259,7 @@ function TeamsTable({
 
     const changes = pendingChanges[teamId] || {};
     const teamAbsent = absentMembers[teamId] || {};
-    
+
     // Always include absent members data, even if empty
     const submissionData = { ...changes, _absentMembers: teamAbsent };
 
@@ -243,7 +268,11 @@ function TeamsTable({
       const response = await fetch(`/api/teams/${teamId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewerId: currentUser?.username, ...submissionData }),
+        body: JSON.stringify({
+          reviewerId: currentUser?.username,
+          isHead: isHead,
+          ...submissionData,
+        }),
       });
 
       if (response.ok) {
@@ -295,6 +324,9 @@ function TeamsTable({
                 </th>
               ))}
               <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Total
+              </th>
+              <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -314,7 +346,11 @@ function TeamsTable({
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <span className="text-blue-600 mr-2">
-                        {expandedTeam === team._id ? "▼" : "▶"}
+                        {expandedTeam === team._id ? (
+                          <FaChevronDown />
+                        ) : (
+                          <FaChevronRight />
+                        )}
                       </span>
                       <span className="text-lg font-semibold text-blue-800">
                         {team.name}
@@ -410,21 +446,31 @@ function TeamsTable({
                       )}
                     </td>
                   ))}
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <span className="text-gray-400">-</span>
+                  </td>
                   {isHead ? (
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteTeam(team._id);
-                        }}
-                        className="px-4 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
-                      >
-                        Delete
-                      </button>
+                      {activeReview &&
+                      team.reviewData?.[activeReview._id]?._scoringLocked ? (
+                        <span className="px-3 py-1 w-fit bg-red-100 text-red-800 rounded text-sm flex items-center gap-1">
+                          <FaLock />
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 w-fit bg-green-100 text-green-800 rounded text-sm flex items-center gap-1">
+                          <FaUnlock />
+                        </span>
+                      )}
                     </td>
                   ) : (
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {(pendingChanges[team._id] || absentMembers[team._id]) && (
+                      {activeReview &&
+                      team.reviewData?.[activeReview._id]?._scoringLocked ? (
+                        <span className="px-3 py-1 w-fit bg-red-400 text-white rounded text-sm flex items-center gap-1">
+                          <FaLock />
+                        </span>
+                      ) : pendingChanges[team._id] ||
+                        absentMembers[team._id] ? (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -435,6 +481,10 @@ function TeamsTable({
                         >
                           {submittingTeam === team._id ? "Saving..." : "Submit"}
                         </button>
+                      ) : (
+                        <span className="px-3 py-1 w-fit bg-blue-100 text-blue-800 rounded text-sm flex items-center gap-1">
+                          <FaCheck /> Ready
+                        </span>
                       )}
                     </td>
                   )}
@@ -451,10 +501,14 @@ function TeamsTable({
                     >
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center pl-8">
-                          <span className="text-gray-600 mr-2">👤</span>
+                          <FaUser className="text-gray-600 mr-2" />
                           <span
                             className={`text-gray-700 ${
-                              absentMembers[team._id]?.[member] || isAbsentFromSavedData(team._id, member)
+                              (
+                                absentMembers[team._id]?.[member] !== undefined
+                                  ? absentMembers[team._id][member]
+                                  : isAbsentFromSavedData(team._id, member)
+                              )
                                 ? "line-through opacity-50"
                                 : ""
                             }`}
@@ -469,7 +523,10 @@ function TeamsTable({
                               <input
                                 type="checkbox"
                                 checked={
-                                  absentMembers[team._id]?.[member] || isAbsentFromSavedData(team._id, member) || false
+                                  absentMembers[team._id]?.[member] !==
+                                  undefined
+                                    ? absentMembers[team._id][member]
+                                    : isAbsentFromSavedData(team._id, member)
                                 }
                                 onChange={() => toggleAbsent(team._id, member)}
                                 className="mr-1"
@@ -487,11 +544,20 @@ function TeamsTable({
                           {col.type === "individual" ? (
                             isHead ? (
                               <span className="text-gray-700">
-                                {absentMembers[team._id]?.[member] || isAbsentFromSavedData(team._id, member)
+                                {(
+                                  absentMembers[team._id]?.[member] !==
+                                  undefined
+                                    ? absentMembers[team._id][member]
+                                    : isAbsentFromSavedData(team._id, member)
+                                )
                                   ? "Absent"
                                   : getDisplayValue(team, col, member) || "-"}
                               </span>
-                            ) : absentMembers[team._id]?.[member] || isAbsentFromSavedData(team._id, member) ? (
+                            ) : (
+                                absentMembers[team._id]?.[member] !== undefined
+                                  ? absentMembers[team._id][member]
+                                  : isAbsentFromSavedData(team._id, member)
+                              ) ? (
                               <span className="text-gray-500 italic">
                                 Absent
                               </span>
@@ -586,11 +652,12 @@ function TeamsTable({
                           )}
                         </td>
                       ))}
-                      {isHead ? (
-                        <td className="px-4 py-3"></td>
-                      ) : (
-                        <td className="px-4 py-3"></td>
-                      )}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="font-semibold text-blue-600">
+                          {calculateMemberTotal(team, member)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3"></td>
                     </tr>
                   );
                 });

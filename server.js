@@ -5,6 +5,9 @@ const path = require("path");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,9 +29,16 @@ const excelStorage = multer.diskStorage({
 
 const uploadExcel = multer({ storage: excelStorage });
 
+// Cloudinary configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 // MongoDB connection
 mongoose.connect(
-  "mongodb+srv://pavan:aditya1212@cluster0.vct1jht.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+  process.env.MONGODB_URI || "mongodb+srv://pavan:aditya1212@cluster0.vct1jht.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
   {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -45,6 +55,10 @@ const teamSchema = new mongoose.Schema(
     reviewData: {
       type: Object,
       default: {}
+    },
+    uploadLocked: {
+      type: Boolean,
+      default: false
     }
   },
   { strict: false }
@@ -57,6 +71,7 @@ const columnSchema = new mongoose.Schema({
   options: [String],
   maxMarks: Number,
   order: { type: Number, default: 0 },
+  reviewId: { type: mongoose.Schema.Types.ObjectId, ref: 'Review', required: true },
 });
 
 const userSchema = new mongoose.Schema({
@@ -89,6 +104,18 @@ const submissionSchema = new mongoose.Schema({
   fileName: String,
   originalName: String,
   filePath: String,
+  cloudinaryPublicId: String,
+  uploadedAt: { type: Date, default: Date.now },
+  isLocked: { type: Boolean, default: false }
+});
+
+const templateSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+  fileName: String,
+  originalName: String,
+  filePath: String,
+  cloudinaryPublicId: String,
   uploadedAt: { type: Date, default: Date.now }
 });
 
@@ -98,6 +125,7 @@ const User = mongoose.model("User", userSchema);
 const Review = mongoose.model("Review", reviewSchema);
 const UploadRequirement = mongoose.model("UploadRequirement", uploadRequirementSchema);
 const Submission = mongoose.model("Submission", submissionSchema);
+const Template = mongoose.model("Template", templateSchema);
 
 //
 // 🧠 Helper: Normalize header names
@@ -146,8 +174,9 @@ app.post("/api/import-excel", uploadExcel.single("excelFile"), async (req, res) 
     const headers = Object.keys(validData[0]);
     console.log("Excel Headers Detected:", headers);
 
-    // Fetch custom columns
-    const columns = await Column.find();
+    // Fetch custom columns for active review
+    const activeReview = await Review.findOne({ isActive: true });
+    const columns = activeReview ? await Column.find({ reviewId: activeReview._id }) : [];
     const createdTeams = [];
 
     // Grouping by batch number with carry-forward for merged cells
@@ -248,17 +277,7 @@ app.post("/api/import-excel", uploadExcel.single("excelFile"), async (req, res) 
         guide: teamData.guide || "",
       };
 
-      // Add custom columns
-      columns.forEach((col) => {
-        if (col.type === "individual") {
-          newTeam[col.name] = {};
-          teamData.members.forEach((member) => {
-            newTeam[col.name][member] = "";
-          });
-        } else {
-          newTeam[col.name] = "";
-        }
-      });
+      // Skip adding columns during import - they will be added when columns are created for the review
       
       // Initialize review data
       newTeam.reviewData = {};
@@ -355,11 +374,18 @@ app.put("/api/teams/:id", async (req, res) => {
     }
     
     const team = await Team.findById(req.params.id);
+    
     if (!team.reviewData) {
       team.reviewData = {};
     }
     if (!team.reviewData[activeReview._id]) {
       team.reviewData[activeReview._id] = {};
+    }
+    
+    // Check if scoring is locked for this review for non-head users
+    const isReviewLocked = team.reviewData[activeReview._id]._scoringLocked;
+    if (isReviewLocked && (!req.body.isHead)) {
+      return res.status(403).json({ error: "Scoring is locked for this review. Contact head to unlock." });
     }
     
     // Store absent members data
@@ -378,6 +404,11 @@ app.put("/api/teams/:id", async (req, res) => {
         team.reviewData[activeReview._id][key] = updateData[key];
       }
     });
+    
+    // Lock scoring for this review after first submission (only for reviewers)
+    if (!req.body.isHead && !isReviewLocked) {
+      team.reviewData[activeReview._id]._scoringLocked = true;
+    }
     
     team.markModified('reviewData');
     await team.save();
@@ -404,7 +435,11 @@ app.delete("/api/teams/:id", async (req, res) => {
 
 app.get("/api/columns", async (req, res) => {
   try {
-    const columns = await Column.find().sort({ order: 1 });
+    const activeReview = await Review.findOne({ isActive: true });
+    if (!activeReview) {
+      return res.json([]);
+    }
+    const columns = await Column.find({ reviewId: activeReview._id }).sort({ order: 1 });
     res.json(columns);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -413,7 +448,11 @@ app.get("/api/columns", async (req, res) => {
 
 app.post("/api/columns", async (req, res) => {
   try {
-    const column = new Column(req.body);
+    const activeReview = await Review.findOne({ isActive: true });
+    if (!activeReview) {
+      return res.status(400).json({ error: "No active review found" });
+    }
+    const column = new Column({ ...req.body, reviewId: activeReview._id });
     await column.save();
     res.json(column);
   } catch (error) {
@@ -423,8 +462,12 @@ app.post("/api/columns", async (req, res) => {
 
 app.put("/api/columns/:name", async (req, res) => {
   try {
+    const activeReview = await Review.findOne({ isActive: true });
+    if (!activeReview) {
+      return res.status(400).json({ error: "No active review found" });
+    }
     const column = await Column.findOneAndUpdate(
-      { name: req.params.name },
+      { name: req.params.name, reviewId: activeReview._id },
       req.body,
       { new: true }
     );
@@ -436,7 +479,11 @@ app.put("/api/columns/:name", async (req, res) => {
 
 app.delete("/api/columns/:name", async (req, res) => {
   try {
-    await Column.findOneAndDelete({ name: req.params.name });
+    const activeReview = await Review.findOne({ isActive: true });
+    if (!activeReview) {
+      return res.status(400).json({ error: "No active review found" });
+    }
+    await Column.findOneAndDelete({ name: req.params.name, reviewId: activeReview._id });
     res.json({ message: "Column deleted" });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -553,60 +600,145 @@ app.put("/api/upload-requirements/:id", async (req, res) => {
 
 app.delete("/api/upload-requirements/:id", async (req, res) => {
   try {
-    await UploadRequirement.findByIdAndDelete(req.params.id);
-    res.json({ message: "Upload requirement deleted" });
+    const requirementId = req.params.id;
+    
+    // Find all submissions for this requirement
+    const submissions = await Submission.find({ requirementId });
+    console.log(`Found ${submissions.length} submissions to delete`);
+    
+    // Delete files from Cloudinary
+    for (const submission of submissions) {
+      console.log(`Processing submission:`, {
+        id: submission._id,
+        publicId: submission.cloudinaryPublicId,
+        fileName: submission.fileName
+      });
+      
+      if (submission.cloudinaryPublicId) {
+        try {
+          // Try deletion with raw resource type first (documents are stored as raw)
+          let result = await cloudinary.uploader.destroy(submission.cloudinaryPublicId, { resource_type: 'raw' });
+          console.log(`Deletion attempt (raw):`, result);
+          
+          // If not found, try without resource_type (defaults to image)
+          if (result.result === 'not found') {
+            result = await cloudinary.uploader.destroy(submission.cloudinaryPublicId);
+            console.log(`Deletion attempt (default):`, result);
+          }
+          
+          if (result.result === 'ok') {
+            console.log('✅ Successfully deleted from Cloudinary');
+          } else {
+            console.log(`ℹ️ Final deletion result: ${result.result}`);
+          }
+        } catch (cloudinaryError) {
+          console.error(`Cloudinary deletion error:`, cloudinaryError);
+        }
+      } else {
+        console.log('No cloudinaryPublicId found for submission:', submission._id);
+      }
+    }
+    
+    // Delete all submissions for this requirement
+    await Submission.deleteMany({ requirementId });
+    
+    // Delete the requirement
+    await UploadRequirement.findByIdAndDelete(requirementId);
+    
+    res.json({ message: "Upload requirement and all submissions deleted" });
   } catch (error) {
+    console.error('Delete requirement error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// Temporary storage for multer
+const tempStorage = multer({ dest: 'temp/' });
+
 // File Upload Route
-app.post("/api/upload-file/:requirementId", (req, res) => {
-  // Parse multipart form data first
-  const tempUpload = multer({ dest: 'temp/' }).single('file');
-  
-  tempUpload(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message });
+app.post("/api/upload-file/:requirementId", tempStorage.single('file'), async (req, res) => {
+  try {
+    const { batchName } = req.body;
+    console.log('Upload - Batch name:', batchName);
+    
+    if (!batchName) {
+      return res.status(400).json({ error: 'Batch name is required' });
     }
     
-    try {
-      const { batchName } = req.body;
-      console.log('Upload - Batch name:', batchName);
-      
-      if (!batchName) {
-        return res.status(400).json({ error: 'Batch name is required' });
-      }
-      
-      if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-      }
-      
-      // Create destination directory
-      const dir = `team_uploads/${batchName}`;
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      
-      // Move file to correct location
-      const finalPath = path.join(dir, req.file.originalname);
-      fs.renameSync(req.file.path, finalPath);
-      
-      const submission = new Submission({
-        requirementId: req.params.requirementId,
-        batchName,
-        fileName: req.file.originalname,
-        originalName: req.file.originalname,
-        filePath: finalPath
-      });
-      
-      await submission.save();
-      res.json({ message: "File uploaded successfully", submission });
-    } catch (error) {
-      console.error('Upload error:', error);
-      res.status(500).json({ error: error.message });
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
     }
-  });
+    
+    // Check if any file already exists for this requirement and batch
+    const existingSubmission = await Submission.findOne({
+      requirementId: req.params.requirementId,
+      batchName: batchName
+    });
+    
+    if (existingSubmission && existingSubmission.isLocked) {
+      fs.unlinkSync(req.file.path); // Clean up temp file
+      return res.status(403).json({ error: 'File upload is locked. Contact head to unlock.' });
+    }
+    
+    // Clean filename and batch name for Cloudinary
+    const fileExt = path.extname(req.file.originalname);
+    const cleanBatchName = batchName.replace(/\s+/g, '_');
+    const cleanFileName = req.file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._]/g, '_');
+    const fileNameWithoutExt = cleanFileName.substring(0, cleanFileName.lastIndexOf('.')) || cleanFileName;
+    
+    // Upload to Cloudinary with extension in public_id
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: `team_uploads/${cleanBatchName}`,
+      public_id: `${cleanBatchName}_${fileNameWithoutExt}${fileExt}`,
+      resource_type: "auto"
+    });
+    
+    // Delete temp file
+    fs.unlinkSync(req.file.path);
+    
+    if (existingSubmission) {
+      // Delete old file from Cloudinary
+      if (existingSubmission.cloudinaryPublicId) {
+        try {
+          // Try deletion with raw resource type first
+          let result = await cloudinary.uploader.destroy(existingSubmission.cloudinaryPublicId, { resource_type: 'raw' });
+          if (result.result === 'not found') {
+            result = await cloudinary.uploader.destroy(existingSubmission.cloudinaryPublicId);
+          }
+          console.log(`Old file deletion result: ${result.result}`);
+        } catch (error) {
+          console.error('Error deleting old file:', error);
+        }
+      }
+      
+      // Update existing submission with new file and lock it
+      existingSubmission.fileName = req.file.originalname;
+      existingSubmission.originalName = req.file.originalname;
+      existingSubmission.filePath = result.secure_url;
+      existingSubmission.cloudinaryPublicId = result.public_id;
+      existingSubmission.uploadedAt = new Date();
+      existingSubmission.isLocked = true;
+      await existingSubmission.save();
+      
+      return res.json({ message: "File replaced and locked successfully", submission: existingSubmission });
+    }
+    
+    const submission = new Submission({
+      requirementId: req.params.requirementId,
+      batchName,
+      fileName: req.file.originalname,
+      originalName: req.file.originalname,
+      filePath: result.secure_url, // Cloudinary URL
+      cloudinaryPublicId: result.public_id, // Cloudinary public ID
+      isLocked: true // Lock after first upload
+    });
+    
+    await submission.save();
+    res.json({ message: "File uploaded and locked successfully", submission });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Get Submissions Route
@@ -626,7 +758,8 @@ app.get("/api/download/:submissionId", async (req, res) => {
     if (!submission) {
       return res.status(404).json({ error: "File not found" });
     }
-    res.download(submission.filePath, submission.originalName);
+    // Redirect to Cloudinary URL for download
+    res.redirect(submission.filePath);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -694,6 +827,51 @@ app.delete("/api/reviews/:id/reset", async (req, res) => {
   }
 });
 
+// Unlock team scoring for active review
+app.put("/api/teams/:id/unlock-scoring", async (req, res) => {
+  try {
+    const activeReview = await Review.findOne({ isActive: true });
+    if (!activeReview) {
+      return res.status(400).json({ error: "No active review found" });
+    }
+    
+    const team = await Team.findById(req.params.id);
+    if (!team) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+    
+    if (!team.reviewData) {
+      team.reviewData = {};
+    }
+    if (!team.reviewData[activeReview._id]) {
+      team.reviewData[activeReview._id] = {};
+    }
+    
+    // Unlock scoring for the active review
+    team.reviewData[activeReview._id]._scoringLocked = false;
+    team.markModified('reviewData');
+    await team.save();
+    
+    res.json({ message: "Team scoring unlocked for current review", team });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unlock file upload for team
+app.put("/api/submissions/:id/unlock", async (req, res) => {
+  try {
+    const submission = await Submission.findByIdAndUpdate(
+      req.params.id,
+      { isLocked: false },
+      { new: true }
+    );
+    res.json({ message: "File upload unlocked", submission });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete("/api/reviews/:id", async (req, res) => {
   try {
     const reviewId = req.params.id;
@@ -703,6 +881,9 @@ app.delete("/api/reviews/:id", async (req, res) => {
       {},
       { $unset: { [`reviewData.${reviewId}`]: "" } }
     );
+    
+    // Delete all columns for this review
+    await Column.deleteMany({ reviewId });
     
     // Delete the review
     await Review.findByIdAndDelete(reviewId);
@@ -735,6 +916,219 @@ app.get("/api/init", async (req, res) => {
   }
 });
 
+// Template Management Routes
+app.get("/api/templates", async (req, res) => {
+  try {
+    const templates = await Template.find().sort({ uploadedAt: -1 });
+    res.json(templates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/templates", tempStorage.single('file'), async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    
+    if (!title || !req.file) {
+      return res.status(400).json({ error: 'Title and file are required' });
+    }
+    
+    // Use title as public ID with extension
+    const fileExt = path.extname(req.file.originalname);
+    const cleanTitle = title.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: 'templates',
+      public_id: cleanTitle + fileExt,
+      resource_type: "auto"
+    });
+    
+    // Delete temp file
+    fs.unlinkSync(req.file.path);
+    
+    const template = new Template({
+      title,
+      description: description || '',
+      fileName: req.file.originalname,
+      originalName: req.file.originalname,
+      filePath: result.secure_url,
+      cloudinaryPublicId: result.public_id
+    });
+    
+    await template.save();
+    res.json({ message: "Template uploaded successfully", template });
+  } catch (error) {
+    console.error('Template upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put("/api/templates/:id", tempStorage.single('file'), async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    const template = await Template.findById(req.params.id);
+    
+    if (!template) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+    
+    // Update metadata
+    template.title = title || template.title;
+    template.description = description !== undefined ? description : template.description;
+    
+    // If new file is uploaded, replace the old one
+    if (req.file) {
+      // Delete old file from Cloudinary
+      if (template.cloudinaryPublicId) {
+        try {
+          // Try deletion with raw resource type first
+          let result = await cloudinary.uploader.destroy(template.cloudinaryPublicId, { resource_type: 'raw' });
+          if (result.result === 'not found') {
+            result = await cloudinary.uploader.destroy(template.cloudinaryPublicId);
+          }
+          console.log(`Old template deletion result: ${result.result}`);
+        } catch (error) {
+          console.error('Error deleting old template:', error);
+        }
+      }
+      
+      // Upload new file using title as public ID with extension
+      const fileExt = path.extname(req.file.originalname);
+      const cleanTitle = (title || template.title).replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'templates',
+        public_id: cleanTitle + fileExt,
+        resource_type: "auto"
+      });
+      
+      // Delete temp file
+      fs.unlinkSync(req.file.path);
+      
+      // Update file info
+      template.fileName = req.file.originalname;
+      template.originalName = req.file.originalname;
+      template.filePath = result.secure_url;
+      template.cloudinaryPublicId = result.public_id;
+    }
+    
+    await template.save();
+    res.json({ message: "Template updated successfully", template });
+  } catch (error) {
+    console.error('Template update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete("/api/templates/:id", async (req, res) => {
+  try {
+    const template = await Template.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+    
+    console.log(`Deleting template: ${template.title}, Cloudinary ID: ${template.cloudinaryPublicId}`);
+    
+    // Delete from Cloudinary
+    if (template.cloudinaryPublicId) {
+      try {
+        console.log(`Attempting to delete: ${template.cloudinaryPublicId}`);
+        
+        // First, list all resources in templates folder to debug
+        try {
+          const resources = await cloudinary.api.resources({
+            type: 'upload',
+            prefix: 'templates/',
+            max_results: 100,
+            resource_type: 'auto'
+          });
+          console.log(`Found ${resources.resources.length} templates in Cloudinary:`);
+          resources.resources.forEach(r => console.log(`  - ${r.public_id} (${r.resource_type})`));
+        } catch (listError) {
+          console.log('Could not list Cloudinary resources:', listError.message);
+          // Try listing with different resource type
+          try {
+            const rawResources = await cloudinary.api.resources({
+              type: 'upload',
+              prefix: 'templates/',
+              max_results: 100,
+              resource_type: 'raw'
+            });
+            console.log(`Found ${rawResources.resources.length} raw templates:`);
+            rawResources.resources.forEach(r => console.log(`  - ${r.public_id} (raw)`));
+          } catch (rawError) {
+            console.log('Could not list raw resources either:', rawError.message);
+          }
+        }
+        
+        // Try deletion with raw resource type (documents are stored as raw)
+        let result = await cloudinary.uploader.destroy(template.cloudinaryPublicId, { resource_type: 'raw' });
+        console.log(`Deletion attempt (raw):`, result);
+        
+        // If not found, try without resource_type (defaults to image)
+        if (result.result === 'not found') {
+          result = await cloudinary.uploader.destroy(template.cloudinaryPublicId);
+          console.log(`Deletion attempt (default):`, result);
+        }
+        
+        // If not found, try alternative formats
+        if (result.result === 'not found') {
+          const alternatives = [];
+          
+          // Try without extension
+          const withoutExt = template.cloudinaryPublicId.replace(/\.[^.]+$/, '');
+          alternatives.push(withoutExt);
+          
+          // Try with underscore format
+          if (template.cloudinaryPublicId.includes('.')) {
+            const underscoreFormat = template.cloudinaryPublicId.replace(/\.([^.]+)$/, '_$1');
+            alternatives.push(underscoreFormat);
+          }
+          
+          // Try each alternative
+          for (const altId of alternatives) {
+            console.log(`Trying alternative ID: ${altId}`);
+            result = await cloudinary.uploader.destroy(altId);
+            console.log(`Alternative deletion result:`, result);
+            if (result.result === 'ok') break;
+          }
+        }
+        
+        if (result.result === 'ok') {
+          console.log('✅ Successfully deleted from Cloudinary');
+        } else {
+          console.log(`ℹ️ Final deletion result: ${result.result}`);
+        }
+      } catch (cloudinaryError) {
+        console.error(`Cloudinary deletion error:`, cloudinaryError);
+      }
+    }
+    
+    // Delete from database
+    await Template.findByIdAndDelete(req.params.id);
+    
+    res.json({ message: "Template deleted successfully" });
+  } catch (error) {
+    console.error('Template deletion error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/templates/:id/download", async (req, res) => {
+  try {
+    const template = await Template.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+    // Redirect to Cloudinary URL for download
+    res.redirect(template.filePath);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 //
 // 🏠 Serve Frontend
 //
@@ -743,8 +1137,9 @@ app.get("/api/reports", async (req, res) => {
   try {
     const { type, section } = req.query;
     const teams = await Team.find();
-    const columns = await Column.find().sort({ order: 1 });
     const activeReview = await Review.findOne({ isActive: true });
+    const columns = activeReview ? await Column.find({ reviewId: activeReview._id }).sort({ order: 1 }) : [];
+    const users = await User.find({ role: 'reviewer' });
     
     let filteredTeams = teams;
     let filename = type;
@@ -785,17 +1180,24 @@ app.get("/api/reports", async (req, res) => {
       });
     } else {
       // Score reports with hierarchical format
-      const headers = ['Team/Member', 'Project Title', 'Guide'];
+      const headers = ['Team/Member', 'Roll No', 'Project Title', 'Guide'];
       columns.forEach(col => {
         headers.push(col.name);
       });
+      headers.push('Total', 'Reviewers');
       worksheetData.push(headers);
       
       filteredTeams.forEach(team => {
         const members = team.members.split(',').map(m => m.trim());
         
+        // Get reviewers for this team
+        const sectionLetter = team.name.replace('Batch ', '').charAt(0).toUpperCase();
+        const teamReviewers = users.filter(user => 
+          user.assignedSections?.includes(sectionLetter) || user.assignedSections?.includes(team.name)
+        ).map(user => user.username).join(', ') || 'None';
+        
         // Team header row
-        const teamRow = [team.name, team.projectTitle || '', team.guide || ''];
+        const teamRow = [team.name, '', team.projectTitle || '', team.guide || ''];
         columns.forEach(col => {
           if (col.type === 'team') {
             let value = activeReview && team.reviewData?.[activeReview._id]?.[col.name] || team[col.name] || '';
@@ -808,12 +1210,20 @@ app.get("/api/reports", async (req, res) => {
             teamRow.push(''); // Empty for individual columns at team level
           }
         });
+        teamRow.push('', teamReviewers); // Empty total, then reviewers for team row
         worksheetData.push(teamRow);
         
         // Member rows (indented)
         members.forEach(member => {
-          const memberRow = [`  ${member}`, '', '']; // Indented member name
+          // Extract name and roll number
+          const rollMatch = member.match(/\(([^)]+)\)$/);
+          const rollNo = rollMatch ? rollMatch[1] : '';
+          const memberName = rollMatch ? member.replace(/\s*\([^)]+\)$/, '').trim() : member;
+          
+          const memberRow = [`  ${memberName}`, rollNo, '', '']; // Indented member name, roll no
           const isAbsent = activeReview && team.reviewData?.[activeReview._id]?._absentMembers?.[member];
+          let total = 0;
+          
           columns.forEach(col => {
             if (col.type === 'individual') {
               if (isAbsent) {
@@ -824,17 +1234,24 @@ app.get("/api/reports", async (req, res) => {
                 if (!value && col.inputType === 'options' && col.options && col.options.length > 0) {
                   value = col.options[0];
                 }
+                // Add to total if it's a number
+                if (col.inputType === 'number' && value && !isNaN(parseFloat(value))) {
+                  total += parseFloat(value);
+                }
                 memberRow.push(value);
               }
             } else {
               memberRow.push(''); // Empty for team columns at member level
             }
           });
+          
+          // Add total score and empty reviewers column
+          memberRow.push(isAbsent ? 'Absent' : total, '');
           worksheetData.push(memberRow);
         });
         
         // Add empty row between teams for better readability
-        worksheetData.push(['', '', '']);
+        worksheetData.push(['', '', '', '', ...Array(columns.length + 2).fill('')]);
       });
     }
     

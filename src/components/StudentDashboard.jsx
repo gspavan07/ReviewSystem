@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { 
+  FaHome, FaUpload, FaUsers, FaFolder, FaCheck, FaClock, 
+  FaClipboardList, FaUser, FaDownload, FaSignOutAlt, FaLock, FaUnlock 
+} from "react-icons/fa";
 
 function StudentDashboard({ currentUser, onLogout }) {
   const [studentBatch, setStudentBatch] = useState(null);
@@ -8,6 +12,8 @@ function StudentDashboard({ currentUser, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [toast, setToast] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState({});
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -18,7 +24,18 @@ function StudentDashboard({ currentUser, onLogout }) {
     fetchStudentData();
     fetchUploadRequirements();
     fetchSubmissions();
+    fetchTemplates();
   }, []);
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await fetch("/api/templates");
+      const templatesData = await response.json();
+      setTemplates(templatesData);
+    } catch (error) {
+      console.error("Error fetching templates:", error);
+    }
+  };
 
   const fetchStudentData = async () => {
     try {
@@ -87,6 +104,7 @@ function StudentDashboard({ currentUser, onLogout }) {
     const file = selectedFiles[requirementId];
     if (!file) return;
 
+    setUploadingFiles(prev => ({ ...prev, [requirementId]: true }));
     const formData = new FormData();
     formData.append("file", file);
     formData.append("batchName", currentUser.assignedBatch);
@@ -112,12 +130,15 @@ function StudentDashboard({ currentUser, onLogout }) {
     } catch (error) {
       console.error("Upload error:", error);
       showToast("Upload failed. Please try again.", 'error');
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, [requirementId]: false }));
     }
   };
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
-    { id: 'uploads', label: 'Uploads', icon: '📁' },
+    { id: 'dashboard', label: 'Dashboard', icon: <FaHome /> },
+    { id: 'uploads', label: 'Uploads', icon: <FaFolder /> },
+    { id: 'templates', label: 'Templates', icon: <FaDownload /> },
   ];
 
   if (loading) {
@@ -167,7 +188,7 @@ function StudentDashboard({ currentUser, onLogout }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className="bg-white p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center">
-                  <span className="text-2xl mr-3">👥</span>
+                  <FaUsers className="text-2xl mr-3 text-blue-600" />
                   <div>
                     <p className="text-2xl font-bold text-gray-800">{members.length}</p>
                     <p className="text-gray-600">Team Members</p>
@@ -176,7 +197,7 @@ function StudentDashboard({ currentUser, onLogout }) {
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center">
-                  <span className="text-2xl mr-3">📁</span>
+                  <FaFolder className="text-2xl mr-3 text-green-600" />
                   <div>
                     <p className="text-2xl font-bold text-gray-800">{uploadRequirements.length}</p>
                     <p className="text-gray-600">Upload Tasks</p>
@@ -185,7 +206,7 @@ function StudentDashboard({ currentUser, onLogout }) {
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center">
-                  <span className="text-2xl mr-3">✅</span>
+                  <FaCheck className="text-2xl mr-3 text-purple-600" />
                   <div>
                     <p className="text-2xl font-bold text-gray-800">{submissions.length}</p>
                     <p className="text-gray-600">Submitted</p>
@@ -196,7 +217,7 @@ function StudentDashboard({ currentUser, onLogout }) {
             {uploadRequirements.filter(req => req.dueDate && !submissions.some(sub => sub.requirementId?._id === req._id || sub.requirementId === req._id)).length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
                 <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
-                  ⏰ Upcoming Deadlines
+                  <FaClock className="mr-2" /> Upcoming Deadlines
                 </h3>
                 <div className="space-y-3">
                   {uploadRequirements
@@ -244,7 +265,7 @@ function StudentDashboard({ currentUser, onLogout }) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
-                  📋 Batch Information
+                  <FaClipboardList className="mr-2" /> Batch Information
                 </h3>
                 <div className="space-y-4">
                   <div>
@@ -267,7 +288,7 @@ function StudentDashboard({ currentUser, onLogout }) {
               </div>
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
-                  👥 Batch Members
+                  <FaUsers className="mr-2" /> Batch Members
                 </h3>
                 <div className="space-y-3">
                   {members.map((member, index) => {
@@ -275,7 +296,7 @@ function StudentDashboard({ currentUser, onLogout }) {
                     const name = member.replace(/\s*\([^)]*\)/, "");
                     return (
                       <div key={index} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                        <span className="text-blue-600 mr-3">👤</span>
+                        <FaUser className="text-blue-600 mr-3" />
                         <div>
                           <p className="font-medium text-gray-800">{name}</p>
                           {rollNumber && <p className="text-sm text-gray-600">{rollNumber}</p>}
@@ -296,15 +317,17 @@ function StudentDashboard({ currentUser, onLogout }) {
           <div className="space-y-6">
             {uploadRequirements.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
-                <span className="text-4xl mb-4 block">📁</span>
+                <FaFolder className="text-4xl mb-4 text-gray-400" />
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">No Upload Requirements</h3>
                 <p className="text-gray-600">There are currently no upload requirements for your batch.</p>
               </div>
             ) : (
               uploadRequirements.map((req) => {
-                const hasSubmitted = submissions.some(
+                const submission = submissions.find(
                   (sub) => sub.requirementId?._id === req._id || sub.requirementId === req._id
                 );
+                const hasSubmitted = !!submission;
+                const isLocked = submission?.isLocked || false;
                 return (
                   <div key={req._id} className="bg-white rounded-xl shadow-sm border p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -318,16 +341,22 @@ function StudentDashboard({ currentUser, onLogout }) {
                         )}
                       </div>
                       {hasSubmitted ? (
-                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                          ✓ Submitted
-                        </span>
+                        isLocked ? (
+                          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
+                            <FaCheck /> Submitted
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium flex items-center gap-1">
+                            <FaUpload /> Can Re-upload
+                          </span>
+                        )
                       ) : (
                         <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
                           Pending
                         </span>
                       )}
                     </div>
-                    {!hasSubmitted && (
+                    {(!hasSubmitted || !isLocked) && (
                       <div className="border-t pt-4">
                         <div className="flex gap-3 items-center">
                           <input
@@ -341,19 +370,34 @@ function StudentDashboard({ currentUser, onLogout }) {
                           />
                           <button
                             onClick={() => handleFileUpload(req._id)}
-                            disabled={!selectedFiles[req._id]}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                              selectedFiles[req._id]
+                            disabled={!selectedFiles[req._id] || uploadingFiles[req._id]}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                              selectedFiles[req._id] && !uploadingFiles[req._id]
                                 ? "bg-blue-600 text-white hover:bg-blue-700"
                                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
                             }`}
                           >
-                            Upload
+                            {uploadingFiles[req._id] ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <FaUpload />
+                                {hasSubmitted ? 'Re-upload' : 'Upload'}
+                              </>
+                            )}
                           </button>
                         </div>
                         {selectedFiles[req._id] && (
                           <p className="text-sm text-gray-600 mt-2">
                             Selected: {selectedFiles[req._id].name}
+                          </p>
+                        )}
+                        {hasSubmitted && !isLocked && (
+                          <p className="text-sm text-green-600 mt-2">
+                            ✓ Upload unlocked - You can replace your file
                           </p>
                         )}
                       </div>
@@ -363,16 +407,29 @@ function StudentDashboard({ currentUser, onLogout }) {
                         {submissions
                           .filter((sub) => sub.requirementId?._id === req._id || sub.requirementId === req._id)
                           .map((sub) => (
-                            <div key={sub._id} className="flex items-center justify-between text-sm text-gray-600">
-                              <span>
-                                Uploaded: {sub.originalName} on {new Date(sub.uploadedAt).toLocaleDateString()}
-                              </span>
-                              <button
-                                onClick={() => window.open(`/api/download/${sub._id}`, '_blank')}
-                                className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                              >
-                                Download
-                              </button>
+                            <div key={sub._id} className="space-y-2">
+                              <div className="flex items-center justify-between text-sm text-gray-600">
+                                <span>
+                                  Uploaded: {sub.originalName} on {new Date(sub.uploadedAt).toLocaleDateString()}
+                                </span>
+                                <button
+                                  onClick={() => window.open(`/api/download/${sub._id}`, '_blank')}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                >
+                                  <FaDownload /> Download
+                                </button>
+                              </div>
+                              <div className="flex items-center text-xs mt-1">
+                                {sub.isLocked ? (
+                                  <span className="text-red-600 flex items-center">
+                                    <FaLock className="mr-1" /> File upload is locked
+                                  </span>
+                                ) : (
+                                  <span className="text-green-600 flex items-center">
+                                    <FaUnlock className="mr-1" /> Upload unlocked - can be replaced
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ))}
                       </div>
@@ -381,6 +438,59 @@ function StudentDashboard({ currentUser, onLogout }) {
                 );
               })
             )}
+          </div>
+        );
+      
+      case 'templates':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                <FaDownload className="mr-2" /> Document Templates
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Download templates provided by your instructors to help with document preparation.
+              </p>
+              {templates.length === 0 ? (
+                <div className="text-center py-8">
+                  <FaDownload className="text-4xl mb-4 text-gray-400 mx-auto" />
+                  <h4 className="text-lg font-semibold text-gray-800 mb-2">No Templates Available</h4>
+                  <p className="text-gray-600">Your instructors haven't uploaded any templates yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {templates.map((template) => (
+                    <div
+                      key={template._id}
+                      className="bg-gray-50 p-4 rounded-lg border hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-semibold text-gray-800">{template.title}</h4>
+                          {template.description && (
+                            <p className="text-gray-600 text-sm mt-1">{template.description}</p>
+                          )}
+                          <p className="text-gray-500 text-xs mt-2">
+                            File: {template.originalName}
+                          </p>
+                          <p className="text-gray-500 text-xs">
+                            Uploaded: {new Date(template.uploadedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <a
+                        href={`/api/templates/${template._id}/download`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-center font-medium flex items-center justify-center gap-2"
+                      >
+                        <FaDownload /> Download Template
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         );
       
@@ -428,9 +538,9 @@ function StudentDashboard({ currentUser, onLogout }) {
         <div className="absolute bottom-0 w-64 p-6 border-t">
           <button
             onClick={onLogout}
-            className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+            className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
           >
-            Logout
+            <FaSignOutAlt /> Logout
           </button>
           <p className="text-center text-gray-400 font-medium text-sm mt-4">
             Developed by <b className="text-gray-600">Team Ofzen</b>
