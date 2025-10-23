@@ -19,7 +19,12 @@ mongod
 
 3. Start the application:
 ```bash
-npm start
+npm run server
+```
+
+Or for development with auto-restart:
+```bash
+npm run server:dev
 ```
 
 4. Open browser and go to: `http://localhost:3000`
