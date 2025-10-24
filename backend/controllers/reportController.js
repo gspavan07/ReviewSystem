@@ -60,7 +60,7 @@ const generateReport = async (req, res) => {
         const sectionLetter = team.name.replace('Batch ', '').charAt(0).toUpperCase();
         const teamReviewers = users.filter(user => 
           user.assignedSections?.includes(sectionLetter) || user.assignedSections?.includes(team.name)
-        ).map(user => user.username).join(', ') || 'None';
+        ).map(user => user.name).join(', ') || 'None';
         
         const teamRow = [team.name, '', team.projectTitle || '', team.guide || ''];
         columns.forEach(col => {

@@ -303,9 +303,9 @@ function TeamsTable({
         </h3>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-[700px] overflow-y-auto">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Team & Members
@@ -332,7 +332,12 @@ function TeamsTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {teams.map((team) => {
+            {teams.sort((a, b) => {
+              // Natural sort for team names with numbers
+              const aName = a.name.replace(/Batch\s+/i, '');
+              const bName = b.name.replace(/Batch\s+/i, '');
+              return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base' });
+            }).map((team) => {
               const members = team.members.split(",").map((m) => m.trim());
               const rows = [];
 
@@ -358,7 +363,11 @@ function TeamsTable({
                     </div>
                   </td>
                   {customColumns.map((col) => (
-                    <td key={col.name} className="px-4 py-4 whitespace-nowrap">
+                    <td 
+                      key={col.name} 
+                      className="px-4 py-4 whitespace-nowrap"
+                      rowSpan={col.type === "team" && col.inputType === "textarea" && expandedTeam === team._id ? members.length + 1 : 1}
+                    >
                       {col.type === "team" ? (
                         isHead ? (
                           <span className="text-gray-700">
@@ -398,7 +407,11 @@ function TeamsTable({
                                 e.target.value
                               )
                             }
-                            className="w-48 h-16 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+                            className={`px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical ${
+                              expandedTeam === team._id 
+                                ? "w-64 h-32" 
+                                : "w-48 h-16"
+                            }`}
                             placeholder="Enter remarks..."
                             onClick={(e) => e.stopPropagation()}
                           />
@@ -482,8 +495,8 @@ function TeamsTable({
                           {submittingTeam === team._id ? "Saving..." : "Submit"}
                         </button>
                       ) : (
-                        <span className="px-3 py-1 w-fit bg-blue-100 text-blue-800 rounded text-sm flex items-center gap-1">
-                          <FaCheck /> Ready
+                        <span className="px-3 py-1 w-fit bg-green-100 text-green-800 rounded text-sm flex items-center gap-1">
+                          <FaUnlock />
                         </span>
                       )}
                     </td>
@@ -536,75 +549,43 @@ function TeamsTable({
                           )}
                         </div>
                       </td>
-                      {customColumns.map((col) => (
-                        <td
-                          key={col.name}
-                          className="px-4 py-3 whitespace-nowrap"
-                        >
-                          {col.type === "individual" ? (
-                            isHead ? (
-                              <span className="text-gray-700">
-                                {(
-                                  absentMembers[team._id]?.[member] !==
-                                  undefined
+                      {customColumns.map((col) => {
+                        // Skip rendering cell for team-level textarea columns as they span from team row
+                        if (col.type === "team" && col.inputType === "textarea") {
+                          return null;
+                        }
+                        
+                        return (
+                          <td
+                            key={col.name}
+                            className="px-4 py-3 whitespace-nowrap"
+                          >
+                            {col.type === "individual" ? (
+                              isHead ? (
+                                <span className="text-gray-700">
+                                  {(
+                                    absentMembers[team._id]?.[member] !==
+                                    undefined
+                                      ? absentMembers[team._id][member]
+                                      : isAbsentFromSavedData(team._id, member)
+                                  )
+                                    ? "Absent"
+                                    : getDisplayValue(team, col, member) || "-"}
+                                </span>
+                              ) : (
+                                  absentMembers[team._id]?.[member] !== undefined
                                     ? absentMembers[team._id][member]
                                     : isAbsentFromSavedData(team._id, member)
-                                )
-                                  ? "Absent"
-                                  : getDisplayValue(team, col, member) || "-"}
-                              </span>
-                            ) : (
-                                absentMembers[team._id]?.[member] !== undefined
-                                  ? absentMembers[team._id][member]
-                                  : isAbsentFromSavedData(team._id, member)
-                              ) ? (
-                              <span className="text-gray-500 italic">
-                                Absent
-                              </span>
-                            ) : col.inputType === "options" ? (
-                              <select
-                                value={
-                                  getDisplayValue(team, col, member) ||
-                                  (col.options && col.options[0]) ||
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  updateMemberScore(
-                                    team._id,
-                                    col.name,
-                                    member,
-                                    e.target.value
-                                  )
-                                }
-                                className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              >
-                                {col.options &&
-                                  col.options.map((option) => (
-                                    <option key={option} value={option}>
-                                      {option}
-                                    </option>
-                                  ))}
-                              </select>
-                            ) : col.inputType === "textarea" ? (
-                              <textarea
-                                value={getDisplayValue(team, col, member) || ""}
-                                onChange={(e) =>
-                                  updateMemberScore(
-                                    team._id,
-                                    col.name,
-                                    member,
-                                    e.target.value
-                                  )
-                                }
-                                className="w-44 h-12 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-                                placeholder="Enter remarks..."
-                              />
-                            ) : col.inputType === "number" ? (
-                              <div className="flex flex-col">
-                                <input
-                                  type="number"
+                                ) ? (
+                                <span className="text-gray-500 italic">
+                                  Absent
+                                </span>
+                              ) : col.inputType === "options" ? (
+                                <select
                                   value={
-                                    getDisplayValue(team, col, member) || ""
+                                    getDisplayValue(team, col, member) ||
+                                    (col.options && col.options[0]) ||
+                                    ""
                                   }
                                   onChange={(e) =>
                                     updateMemberScore(
@@ -614,19 +595,18 @@ function TeamsTable({
                                       e.target.value
                                     )
                                   }
-                                  className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  placeholder={
-                                    col.maxMarks ? `${col.maxMarks}` : ""
-                                  }
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex flex-col">
-                                <input
-                                  type="text"
-                                  value={
-                                    getDisplayValue(team, col, member) || ""
-                                  }
+                                  className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  {col.options &&
+                                    col.options.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                </select>
+                              ) : col.inputType === "textarea" ? (
+                                <textarea
+                                  value={getDisplayValue(team, col, member) || ""}
                                   onChange={(e) =>
                                     updateMemberScore(
                                       team._id,
@@ -635,23 +615,63 @@ function TeamsTable({
                                       e.target.value
                                     )
                                   }
-                                  className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  placeholder={
-                                    col.maxMarks ? `${col.maxMarks}` : ""
-                                  }
+                                  className="w-44 h-12 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+                                  placeholder="Enter remarks..."
                                 />
-                                {col.maxMarks && (
-                                  <span className="text-xs text-gray-500 mt-1">
-                                    /{col.maxMarks}
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                      ))}
+                              ) : col.inputType === "number" ? (
+                                <div className="flex flex-col">
+                                  <input
+                                    type="number"
+                                    value={
+                                      getDisplayValue(team, col, member) || ""
+                                    }
+                                    onChange={(e) =>
+                                      updateMemberScore(
+                                        team._id,
+                                        col.name,
+                                        member,
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder={
+                                      col.maxMarks ? `${col.maxMarks}` : ""
+                                    }
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex flex-col">
+                                  <input
+                                    type="text"
+                                    value={
+                                      getDisplayValue(team, col, member) || ""
+                                    }
+                                    onChange={(e) =>
+                                      updateMemberScore(
+                                        team._id,
+                                        col.name,
+                                        member,
+                                        e.target.value
+                                      )
+                                    }
+                                    className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder={
+                                      col.maxMarks ? `${col.maxMarks}` : ""
+                                    }
+                                  />
+                                  {col.maxMarks && (
+                                    <span className="text-xs text-gray-500 mt-1">
+                                      /{col.maxMarks}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                        );
+                      })}
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="font-semibold text-blue-600">
                           {calculateMemberTotal(team, member)}

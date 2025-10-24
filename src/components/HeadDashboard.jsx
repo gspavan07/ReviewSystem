@@ -79,6 +79,9 @@ function HeadDashboard({
   const [editTeamData, setEditTeamData] = useState({});
   const [reportPreview, setReportPreview] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [importProgress, setImportProgress] = useState(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isSendingEmails, setIsSendingEmails] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -348,7 +351,7 @@ function HeadDashboard({
         const teamReviewers = users.filter(user => 
           user.role === "reviewer" && 
           (user.assignedSections?.includes(sectionLetter) || user.assignedSections?.includes(team.name))
-        ).map(user => user.username).join(", ") || "None";
+        ).map(user => user.name).join(", ") || "None";
         
         const teamRow = [team.name, "", team.projectTitle || "", team.guide || ""];
         customColumns.forEach(col => {
@@ -622,7 +625,8 @@ function HeadDashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...editTeamData,
-          members: editTeamData.members.join(", ")
+          members: editTeamData.members.join(", "),
+          isBasicUpdate: true
         }),
       });
 
@@ -948,8 +952,41 @@ function HeadDashboard({
     const file = event.target.files[0];
     if (!file) return;
 
+    const sessionId = Date.now().toString();
+    setIsImporting(true);
+    setImportProgress({ progress: 0, message: 'Starting import...', step: 'init' });
+
+    // Start SSE connection for progress updates
+    const eventSource = new EventSource(`/api/import-progress/${sessionId}`);
+    
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'progress') {
+        setImportProgress({
+          progress: data.progress,
+          message: data.message,
+          step: data.step
+        });
+      } else if (data.type === 'error') {
+        setImportProgress({
+          progress: 0,
+          message: data.message,
+          step: 'error'
+        });
+        showToast(`Import failed: ${data.message}`, "error");
+        setIsImporting(false);
+        eventSource.close();
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
     const formData = new FormData();
     formData.append("excelFile", file);
+    formData.append("sessionId", sessionId);
 
     try {
       const response = await fetch("/api/import-excel", {
@@ -962,12 +999,56 @@ function HeadDashboard({
         showToast(`Successfully imported ${result.teams.length} teams!`);
         await onDataChange();
         event.target.value = "";
+        
+        // Final progress update
+        setImportProgress({
+          progress: 100,
+          message: `Import completed! Created ${result.teams.length} teams`,
+          step: 'complete'
+        });
+        
+        // Hide progress after delay
+        setTimeout(() => {
+          setImportProgress(null);
+          setIsImporting(false);
+        }, 3000);
       } else {
         const error = await response.json();
         showToast(`Import failed: ${error.error}`, "error");
+        setImportProgress(null);
+        setIsImporting(false);
       }
+      
+      eventSource.close();
     } catch (error) {
       showToast("Error importing file", "error");
+      setImportProgress(null);
+      setIsImporting(false);
+      eventSource.close();
+    }
+  };
+
+  const sendLoginDetailsToAll = async () => {
+    if (!window.confirm('Send login details to all team members? This will send emails to all students.')) {
+      return;
+    }
+
+    setIsSendingEmails(true);
+    try {
+      const response = await fetch('/api/email/send-login-details', {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        showToast(`Emails sent to ${result.results.length} teams successfully!`);
+      } else {
+        showToast('Error sending emails', 'error');
+      }
+    } catch (error) {
+      showToast('Error sending emails', 'error');
+    } finally {
+      setIsSendingEmails(false);
     }
   };
 
@@ -1022,6 +1103,35 @@ function HeadDashboard({
               </div>
             </div>
 
+            <div className="bg-blue-50 p-6 rounded-lg mb-6 border-l-4 border-blue-500">
+              <h4 className="text-lg font-semibold text-gray-700 mb-4">
+                Send Login Details
+              </h4>
+              <button
+                onClick={sendLoginDetailsToAll}
+                disabled={isSendingEmails}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                  isSendingEmails
+                    ? "bg-gray-400 text-white cursor-not-allowed"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {isSendingEmails ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Sending Emails...
+                  </>
+                ) : (
+                  <>
+                    📧 Send Login Details to All Teams
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-gray-600 mt-2 italic">
+                This will send login credentials to all team members via email
+              </p>
+            </div>
+
             <div className="bg-green-50 p-6 rounded-lg mb-6 border-l-4 border-green-500">
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
                 Import Teams from Excel
@@ -1030,12 +1140,48 @@ function HeadDashboard({
                 type="file"
                 accept=".xlsx,.xls"
                 onChange={handleFileUpload}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                disabled={isImporting}
+                className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
               <p className="text-xs text-gray-600 mt-2 italic">
                 Excel should have: "Batch No.", "Student Name", "Roll No.",
                 "Project Title", "Guide"
               </p>
+              
+              {/* Progress Bar */}
+              {importProgress && (
+                <div className="mt-4 p-4 bg-white rounded-lg border border-green-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {importProgress.message}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {importProgress.progress}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        importProgress.step === 'error' ? 'bg-red-500' : 
+                        importProgress.step === 'complete' ? 'bg-green-500' : 'bg-blue-500'
+                      }`}
+                      style={{ width: `${importProgress.progress}%` }}
+                    ></div>
+                  </div>
+                  {importProgress.step === 'complete' && (
+                    <div className="flex items-center mt-2 text-green-600">
+                      <FaCheck className="mr-2" />
+                      <span className="text-sm font-medium">Import completed successfully!</span>
+                    </div>
+                  )}
+                  {importProgress.step === 'error' && (
+                    <div className="flex items-center mt-2 text-red-600">
+                      <FaTimes className="mr-2" />
+                      <span className="text-sm font-medium">Import failed</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-50 p-6 rounded-lg">
@@ -1101,6 +1247,27 @@ function HeadDashboard({
                             <FaUnlock /> Unlock
                           </button>
                         )}
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Send login details to ${team.name} members?`)) {
+                              try {
+                                const response = await fetch(`/api/email/send-login-details/${team._id}`, {
+                                  method: 'POST'
+                                });
+                                if (response.ok) {
+                                  showToast(`Login details sent to ${team.name}!`);
+                                } else {
+                                  showToast('Error sending emails', 'error');
+                                }
+                              } catch (error) {
+                                showToast('Error sending emails', 'error');
+                              }
+                            }
+                          }}
+                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
+                        >
+                          📧 Email
+                        </button>
                         <button
                           onClick={() => startEditTeam(team)}
                           className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"

@@ -8,18 +8,30 @@ function ReviewerDashboard({
   currentUser,
   onLogout,
   onDataChange,
+  refreshUserData,
 }) {
+
+  console.log('Rendering ReviewerDashboard with currentUser:', currentUser);
   const filteredTeams = teams.filter((team) => {
+    if (!currentUser.assignedSections || currentUser.assignedSections.length === 0) {
+      return false;
+    }
+    
     // Check if assigned to specific batch name or section letter
     const sectionLetter = team.name
       .replace("Batch ", "")
       .charAt(0)
       .toUpperCase();
+    
     return (
-      currentUser.assignedSections?.includes(team.name) ||
-      currentUser.assignedSections?.includes(sectionLetter)
+      currentUser.assignedSections.includes(team.name) ||
+      currentUser.assignedSections.includes(sectionLetter)
     );
   });
+
+  console.log('Current user assignments:', currentUser?.assignedSections);
+  console.log('Available teams:', teams.map(t => t.name));
+  console.log('Filtered teams:', filteredTeams.map(t => t.name));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -32,11 +44,18 @@ function ReviewerDashboard({
               <div>
                 <h1 className="text-xl font-bold text-gray-800">Reviewer Portal</h1>
                 <p className="text-sm text-gray-600">
-                  {currentUser.username} • Sections: {currentUser.assignedSections?.join(", ") || "None"}
+                  {currentUser.name} • Sections: {currentUser.assignedSections?.join(", ") || "None"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* <button
+                onClick={refreshUserData}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                title="Refresh assignments"
+              >
+                🔄 Refresh
+              </button> */}
               <button
                 onClick={onLogout}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2"

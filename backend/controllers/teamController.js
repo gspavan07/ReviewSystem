@@ -50,14 +50,29 @@ const createTeam = async (req, res) => {
 
 const updateTeam = async (req, res) => {
   try {
-    const { reviewerId, _absentMembers, ...updateData } = req.body;
+    const { reviewerId, _absentMembers, name, members, projectTitle, guide, isBasicUpdate, ...updateData } = req.body;
     
+    const team = await Team.findById(req.params.id);
+    if (!team) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+    
+    // Handle basic team information updates (name, members, etc.)
+    if (isBasicUpdate || name || members || projectTitle !== undefined || guide !== undefined) {
+      if (name) team.name = name;
+      if (members) team.members = members;
+      if (projectTitle !== undefined) team.projectTitle = projectTitle;
+      if (guide !== undefined) team.guide = guide;
+      
+      await team.save();
+      return res.json(team);
+    }
+    
+    // Handle review data updates
     const activeReview = await Review.findOne({ isActive: true });
     if (!activeReview) {
       return res.status(400).json({ error: "No active review found" });
     }
-    
-    const team = await Team.findById(req.params.id);
     
     if (!team.reviewData) {
       team.reviewData = {};

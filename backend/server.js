@@ -14,6 +14,7 @@ const reviewRoutes = require("./routes/reviewRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const importRoutes = require("./routes/importRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const emailRoutes = require("./routes/emailRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +37,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api", importRoutes);
 app.use("/api", reportRoutes);
+app.use("/api/email", emailRoutes);
 
 // Serve Frontend
 app.get("/", (req, res) => {

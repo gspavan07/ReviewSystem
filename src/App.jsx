@@ -45,6 +45,21 @@ function App() {
     localStorage.removeItem('currentUser')
   }
 
+  const refreshUserData = async () => {
+    if (currentUser && currentUser.username) {
+      try {
+        const response = await fetch(`/api/users/${currentUser.username}`);
+        if (response.ok) {
+          const userData = await response.json();
+          setCurrentUser(userData);
+          localStorage.setItem('currentUser', JSON.stringify(userData));
+        }
+      } catch (error) {
+        console.error('Error refreshing user data:', error);
+      }
+    }
+  }
+
   if (!currentUser) {
     return <Login onLogin={setCurrentUser} />
   }
@@ -72,6 +87,7 @@ function App() {
           currentUser={currentUser}
           onLogout={logout}
           onDataChange={loadData}
+          refreshUserData={refreshUserData}
         />
       )}
     </div>

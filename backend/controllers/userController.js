@@ -10,6 +10,7 @@ const login = async (req, res) => {
         assignedSections: user.assignedSections,
         assignedBatch: user.assignedBatch,
         username: user.username,
+        name: user.name,
       });
     } else {
       res.status(401).json({ error: "Invalid credentials" });

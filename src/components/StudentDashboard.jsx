@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   FaHome, FaUpload, FaUsers, FaFolder, FaCheck, FaClock, 
-  FaClipboardList, FaUser, FaDownload, FaSignOutAlt, FaLock, FaUnlock 
+  FaClipboardList, FaUser, FaDownload, FaSignOutAlt, FaLock, FaUnlock, FaBars, FaTimes 
 } from "react-icons/fa";
 
 function StudentDashboard({ currentUser, onLogout }) {
@@ -14,6 +14,7 @@ function StudentDashboard({ currentUser, onLogout }) {
   const [toast, setToast] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState({});
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -181,42 +182,42 @@ function StudentDashboard({ currentUser, onLogout }) {
       case 'dashboard':
         return (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
-              <h2 className="text-2xl font-bold mb-2">Welcome, {currentUser.username}!</h2>
-              <p className="text-blue-100">Batch: {studentBatch.name}</p>
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-4 sm:p-6 text-white">
+              <h2 className="text-xl sm:text-2xl font-bold mb-2">Welcome, {currentUser.username}!</h2>
+              <p className="text-blue-100 text-sm sm:text-base">Batch: {studentBatch.name}</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-xl shadow-sm border">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+              <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center">
-                  <FaUsers className="text-2xl mr-3 text-blue-600" />
+                  <FaUsers className="text-xl sm:text-2xl mr-2 sm:mr-3 text-blue-600" />
                   <div>
-                    <p className="text-2xl font-bold text-gray-800">{members.length}</p>
-                    <p className="text-gray-600">Team Members</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-800">{members.length}</p>
+                    <p className="text-gray-600 text-sm sm:text-base">Team Members</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-xl shadow-sm border">
+              <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center">
-                  <FaFolder className="text-2xl mr-3 text-green-600" />
+                  <FaFolder className="text-xl sm:text-2xl mr-2 sm:mr-3 text-green-600" />
                   <div>
-                    <p className="text-2xl font-bold text-gray-800">{uploadRequirements.length}</p>
-                    <p className="text-gray-600">Upload Tasks</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-800">{uploadRequirements.length}</p>
+                    <p className="text-gray-600 text-sm sm:text-base">Upload Tasks</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-xl shadow-sm border">
+              <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center">
-                  <FaCheck className="text-2xl mr-3 text-purple-600" />
+                  <FaCheck className="text-xl sm:text-2xl mr-2 sm:mr-3 text-purple-600" />
                   <div>
-                    <p className="text-2xl font-bold text-gray-800">{submissions.length}</p>
-                    <p className="text-gray-600">Submitted</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-800">{submissions.length}</p>
+                    <p className="text-gray-600 text-sm sm:text-base">Submitted</p>
                   </div>
                 </div>
               </div>
             </div>
             {uploadRequirements.filter(req => req.dueDate && !submissions.some(sub => sub.requirementId?._id === req._id || sub.requirementId === req._id)).length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+              <div className="bg-white rounded-xl shadow-sm border p-4 sm:p-6 mb-6">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 sm:mb-6 flex items-center">
                   <FaClock className="mr-2" /> Upcoming Deadlines
                 </h3>
                 <div className="space-y-3">
@@ -262,9 +263,9 @@ function StudentDashboard({ currentUser, onLogout }) {
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+              <div className="bg-white rounded-xl shadow-sm border p-4 sm:p-6">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 sm:mb-6 flex items-center">
                   <FaClipboardList className="mr-2" /> Batch Information
                 </h3>
                 <div className="space-y-4">
@@ -286,8 +287,8 @@ function StudentDashboard({ currentUser, onLogout }) {
                   )}
                 </div>
               </div>
-              <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+              <div className="bg-white rounded-xl shadow-sm border p-4 sm:p-6">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 sm:mb-6 flex items-center">
                   <FaUsers className="mr-2" /> Batch Members
                 </h3>
                 <div className="space-y-3">
@@ -316,10 +317,10 @@ function StudentDashboard({ currentUser, onLogout }) {
         return (
           <div className="space-y-6">
             {uploadRequirements.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
-                <FaFolder className="text-4xl mb-4 text-gray-400" />
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">No Upload Requirements</h3>
-                <p className="text-gray-600">There are currently no upload requirements for your batch.</p>
+              <div className="bg-white rounded-xl shadow-sm border p-6 sm:p-8 text-center">
+                <FaFolder className="text-3xl sm:text-4xl mb-4 text-gray-400 mx-auto" />
+                <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">No Upload Requirements</h3>
+                <p className="text-gray-600 text-sm sm:text-base">There are currently no upload requirements for your batch.</p>
               </div>
             ) : (
               uploadRequirements.map((req) => {
@@ -329,11 +330,11 @@ function StudentDashboard({ currentUser, onLogout }) {
                 const hasSubmitted = !!submission;
                 const isLocked = submission?.isLocked || false;
                 return (
-                  <div key={req._id} className="bg-white rounded-xl shadow-sm border p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="font-semibold text-gray-800 text-lg">{req.title}</h4>
-                        <p className="text-gray-600 mt-1">{req.description}</p>
+                  <div key={req._id} className="bg-white rounded-xl shadow-sm border p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 gap-3">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-800 text-base sm:text-lg">{req.title}</h4>
+                        <p className="text-gray-600 mt-1 text-sm sm:text-base">{req.description}</p>
                         {req.dueDate && (
                           <p className="text-gray-500 text-sm mt-2">
                             Due: {new Date(req.dueDate).toLocaleDateString()}
@@ -358,7 +359,7 @@ function StudentDashboard({ currentUser, onLogout }) {
                     </div>
                     {(!hasSubmitted || !isLocked) && (
                       <div className="border-t pt-4">
-                        <div className="flex gap-3 items-center">
+                        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                           <input
                             type="file"
                             onChange={(e) => {
@@ -366,12 +367,12 @@ function StudentDashboard({ currentUser, onLogout }) {
                                 handleFileSelect(req._id, e.target.files[0]);
                               }
                             }}
-                            className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            className="flex-1 text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-2 file:px-3 sm:file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                           />
                           <button
                             onClick={() => handleFileUpload(req._id)}
                             disabled={!selectedFiles[req._id] || uploadingFiles[req._id]}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                            className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 whitespace-nowrap ${
                               selectedFiles[req._id] && !uploadingFiles[req._id]
                                 ? "bg-blue-600 text-white hover:bg-blue-700"
                                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
@@ -444,21 +445,21 @@ function StudentDashboard({ currentUser, onLogout }) {
       case 'templates':
         return (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+            <div className="bg-white rounded-xl shadow-sm border p-4 sm:p-6">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 sm:mb-6 flex items-center">
                 <FaDownload className="mr-2" /> Document Templates
               </h3>
-              <p className="text-gray-600 mb-6">
+              <p className="text-gray-600 mb-4 sm:mb-6 text-sm sm:text-base">
                 Download templates provided by your instructors to help with document preparation.
               </p>
               {templates.length === 0 ? (
-                <div className="text-center py-8">
-                  <FaDownload className="text-4xl mb-4 text-gray-400 mx-auto" />
-                  <h4 className="text-lg font-semibold text-gray-800 mb-2">No Templates Available</h4>
-                  <p className="text-gray-600">Your instructors haven't uploaded any templates yet.</p>
+                <div className="text-center py-6 sm:py-8">
+                  <FaDownload className="text-3xl sm:text-4xl mb-4 text-gray-400 mx-auto" />
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">No Templates Available</h4>
+                  <p className="text-gray-600 text-sm sm:text-base">Your instructors haven't uploaded any templates yet.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {templates.map((template) => (
                     <div
                       key={template._id}
@@ -500,56 +501,77 @@ function StudentDashboard({ currentUser, onLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white ${
+        <div className={`fixed top-4 right-4 z-50 px-4 sm:px-6 py-3 rounded-lg shadow-lg text-white text-sm sm:text-base ${
           toast.type === 'error' ? 'bg-red-600' : 'bg-green-600'
         }`}>
           {toast.message}
         </div>
       )}
       
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="lg:hidden fixed top-6 right-6 z-50 p-2 bg-white rounded-lg shadow-lg"
+      >
+        {sidebarOpen ? <FaTimes /> : <FaBars />}
+      </button>
+
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
       {/* Sidebar */}
-      <div className="w-64 bg-white shadow-lg">
-        <div className="p-6 border-b">
+      <div className={`w-64 bg-white shadow-lg fixed lg:static h-full z-40 transform transition-transform duration-300 flex flex-col ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      }`}>
+        <div className="p-4 sm:p-6 border-b">
           <div className="flex items-center mb-3">
-            <img src="/au_logo.svg" alt="AU Logo" className="h-8 w-8 mr-3" />
-            <h1 className="text-xl font-bold text-gray-800">Student Portal</h1>
+            <img src="/au_logo.svg" alt="AU Logo" className="h-6 sm:h-8 w-6 sm:w-8 mr-2 sm:mr-3" />
+            <h1 className="text-lg sm:text-xl font-bold text-gray-800">Student Portal</h1>
           </div>
-          <p className="text-sm text-gray-600">{currentUser.username}</p>
+          <p className="text-xs sm:text-sm text-gray-600">{currentUser.username}</p>
         </div>
-        <nav className="mt-6">
+        <nav className="mt-6 flex-1 overflow-y-auto">
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center px-6 py-3 text-left transition-colors ${
+              onClick={() => {
+                setActiveTab(item.id);
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center px-4 sm:px-6 py-3 text-left transition-colors text-sm sm:text-base ${
                 activeTab === item.id
                   ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
                   : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <span className="mr-3">{item.icon}</span>
+              <span className="mr-2 sm:mr-3">{item.icon}</span>
               {item.label}
             </button>
           ))}
         </nav>
-        <div className="absolute bottom-0 w-64 p-6 border-t">
+        <div className="p-4 sm:p-6 border-t mt-auto">
           <button
             onClick={onLogout}
-            className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
+            className="w-full px-3 sm:px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             <FaSignOutAlt /> Logout
           </button>
-          <p className="text-center text-gray-400 font-medium text-sm mt-4">
+          <p className="text-center text-gray-400 font-medium text-xs sm:text-sm mt-4">
             Developed by <b className="text-gray-600">Team Ofzen</b>
           </p>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-8">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         {renderContent()}
       </div>
     </div>
