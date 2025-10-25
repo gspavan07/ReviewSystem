@@ -51,6 +51,7 @@ function HeadDashboard({
     useState("");
   const [newRequirementDueDate, setNewRequirementDueDate] = useState("");
   const [selectedSections, setSelectedSections] = useState([]);
+  const [selectedFormats, setSelectedFormats] = useState(['.pdf']);
   const [submissions, setSubmissions] = useState([]);
   const [userFilter, setUserFilter] = useState("all");
   const [editingUser, setEditingUser] = useState(null);
@@ -936,6 +937,7 @@ function HeadDashboard({
             ? new Date(newRequirementDueDate)
             : null,
           sections: selectedSections,
+          allowedFormats: selectedFormats,
         }),
       });
 
@@ -945,6 +947,7 @@ function HeadDashboard({
         setNewRequirementDescription("");
         setNewRequirementDueDate("");
         setSelectedSections([]);
+        setSelectedFormats(['.pdf']);
         showToast("Upload requirement added successfully!");
       } else {
         showToast("Error adding upload requirement", "error");
@@ -2049,6 +2052,30 @@ function HeadDashboard({
                     ))}
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Allowed File Formats:
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.txt', '.zip'].map((format) => (
+                      <label key={format} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedFormats.includes(format)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedFormats([...selectedFormats, format]);
+                            } else {
+                              setSelectedFormats(selectedFormats.filter(f => f !== format));
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">{format}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <button
                   onClick={addUploadRequirement}
                   disabled={isLoading("addUploadRequirement")}
@@ -2153,6 +2180,11 @@ function HeadDashboard({
                               ? req.sections.join(", ")
                               : "All"}
                           </p>
+                          {req.allowedFormats && req.allowedFormats.length > 0 && (
+                            <p className="text-green-600 text-sm mt-1">
+                              Allowed formats: {req.allowedFormats.join(", ")}
+                            </p>
+                          )}
                           {req.dueDate && (
                             <p className="text-gray-500 text-xs mt-1">
                               Due: {new Date(req.dueDate).toLocaleDateString()}

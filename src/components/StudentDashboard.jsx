@@ -360,15 +360,23 @@ function StudentDashboard({ currentUser, onLogout }) {
                     {(!hasSubmitted || !isLocked) && (
                       <div className="border-t pt-4">
                         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                          <input
-                            type="file"
-                            onChange={(e) => {
-                              if (e.target.files[0]) {
-                                handleFileSelect(req._id, e.target.files[0]);
-                              }
-                            }}
-                            className="flex-1 text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-2 file:px-3 sm:file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                          />
+                          <div className="flex-1">
+                            <input
+                              type="file"
+                              accept={req.allowedFormats?.join(',') || '*'}
+                              onChange={(e) => {
+                                if (e.target.files[0]) {
+                                  handleFileSelect(req._id, e.target.files[0]);
+                                }
+                              }}
+                              className="w-full text-sm text-gray-500 file:mr-2 sm:file:mr-4 file:py-2 file:px-3 sm:file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            />
+                            {req.allowedFormats && req.allowedFormats.length > 0 && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Allowed formats: {req.allowedFormats.join(', ')}
+                              </p>
+                            )}
+                          </div>
                           <button
                             onClick={() => handleFileUpload(req._id)}
                             disabled={!selectedFiles[req._id] || uploadingFiles[req._id]}

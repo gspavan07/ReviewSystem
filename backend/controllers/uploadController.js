@@ -74,6 +74,24 @@ const uploadFile = async (req, res) => {
       return res.status(400).json({ error: 'Batch name and file are required' });
     }
     
+    // Get upload requirement to check allowed formats
+    const requirement = await UploadRequirement.findById(req.params.requirementId);
+    if (!requirement) {
+      return res.status(404).json({ error: 'Upload requirement not found' });
+    }
+    
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
+    
+    // Check file format
+    if (requirement.allowedFormats && requirement.allowedFormats.length > 0) {
+      if (!requirement.allowedFormats.includes(fileExt)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ 
+          error: `File format ${fileExt} not allowed. Allowed formats: ${requirement.allowedFormats.join(', ')}` 
+        });
+      }
+    }
+    
     const existingSubmission = await Submission.findOne({
       requirementId: req.params.requirementId,
       batchName: batchName
@@ -83,8 +101,6 @@ const uploadFile = async (req, res) => {
       fs.unlinkSync(req.file.path);
       return res.status(403).json({ error: 'File upload is locked. Contact head to unlock.' });
     }
-    
-    const fileExt = path.extname(req.file.originalname).toLowerCase();
     const cleanBatchName = batchName.replace(/\s+/g, '_');
     const cleanFileName = req.file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._]/g, '_');
     const fileNameWithoutExt = cleanFileName.substring(0, cleanFileName.lastIndexOf('.')) || cleanFileName;

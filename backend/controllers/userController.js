@@ -59,7 +59,9 @@ const createUser = async (req, res) => {
 
 const updateUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const user = await User.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -101,5 +103,5 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
-  initializeDefaultUser
+  initializeDefaultUser,
 };

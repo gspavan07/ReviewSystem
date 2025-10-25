@@ -5,6 +5,7 @@ const uploadRequirementSchema = new mongoose.Schema({
   description: String,
   dueDate: Date,
   sections: [String],
+  allowedFormats: [String],
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now }
 });
