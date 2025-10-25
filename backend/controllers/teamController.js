@@ -101,6 +101,12 @@ const updateTeam = async (req, res) => {
       }
     });
     
+    // Store reviewer information
+    if (reviewerId) {
+      team.reviewData[activeReview._id]._submittedBy = reviewerId;
+      team.reviewData[activeReview._id]._submittedAt = new Date();
+    }
+    
     if (!req.body.isHead && !isReviewLocked) {
       team.reviewData[activeReview._id]._scoringLocked = true;
     }
@@ -156,10 +162,40 @@ const unlockTeamScoring = async (req, res) => {
   }
 };
 
+const lockTeamScoring = async (req, res) => {
+  try {
+    const activeReview = await Review.findOne({ isActive: true });
+    if (!activeReview) {
+      return res.status(400).json({ error: "No active review found" });
+    }
+    
+    const team = await Team.findById(req.params.id);
+    if (!team) {
+      return res.status(404).json({ error: "Team not found" });
+    }
+    
+    if (!team.reviewData) {
+      team.reviewData = {};
+    }
+    if (!team.reviewData[activeReview._id]) {
+      team.reviewData[activeReview._id] = {};
+    }
+    
+    team.reviewData[activeReview._id]._scoringLocked = true;
+    team.markModified('reviewData');
+    await team.save();
+    
+    res.json({ message: "Team scoring locked for current review", team });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getAllTeams,
   createTeam,
   updateTeam,
   deleteTeam,
-  unlockTeamScoring
+  unlockTeamScoring,
+  lockTeamScoring
 };

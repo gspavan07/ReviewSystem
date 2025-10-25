@@ -121,12 +121,19 @@ function TeamsTable({
 
   const updateTeamStatus = async (teamId, field, status) => {
     if (isHead) {
-      const updateData = { [field]: status };
+      const updateData = {
+        [field]: status,
+        _absentMembers: absentMembers[teamId] || {},
+      };
       try {
         const response = await fetch(`/api/teams/${teamId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updateData),
+          body: JSON.stringify({
+            reviewerId: currentUser?.username,
+            isHead: true,
+            ...updateData,
+          }),
         });
         if (response.ok) {
           await onDataChange();
@@ -154,12 +161,17 @@ function TeamsTable({
           ...team[field],
           [member]: score,
         },
+        _absentMembers: absentMembers[teamId] || {},
       };
       try {
         const response = await fetch(`/api/teams/${teamId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updateData),
+          body: JSON.stringify({
+            reviewerId: currentUser?.username,
+            isHead: true,
+            ...updateData,
+          }),
         });
         if (response.ok) {
           await onDataChange();
@@ -199,6 +211,16 @@ function TeamsTable({
         if (!value && col.inputType !== "options") {
           return `Please fill ${col.name} for team`;
         }
+        // Validate team-level number inputs
+        if (col.inputType === "number" && value && !isNaN(value)) {
+          const numValue = parseFloat(value);
+          if (numValue < 0) {
+            return `${col.name} for team cannot be negative`;
+          }
+          if (col.maxMarks && numValue > col.maxMarks) {
+            return `${col.name} for team cannot exceed ${col.maxMarks} marks`;
+          }
+        }
       }
     }
 
@@ -214,9 +236,13 @@ function TeamsTable({
             return `Please fill ${col.name} for ${member} or mark as absent`;
           }
 
-          // Validate max marks
-          if (col.maxMarks && value && !isNaN(value)) {
-            if (parseFloat(value) > col.maxMarks) {
+          // Validate marks range
+          if (col.inputType === "number" && value && !isNaN(value)) {
+            const numValue = parseFloat(value);
+            if (numValue < 0) {
+              return `${col.name} for ${member} cannot be negative`;
+            }
+            if (col.maxMarks && numValue > col.maxMarks) {
               return `${col.name} for ${member} cannot exceed ${col.maxMarks} marks`;
             }
           }
@@ -332,93 +358,209 @@ function TeamsTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {teams.sort((a, b) => {
-              // Natural sort for team names with numbers
-              const aName = a.name.replace(/Batch\s+/i, '');
-              const bName = b.name.replace(/Batch\s+/i, '');
-              return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base' });
-            }).map((team) => {
-              const members = team.members.split(",").map((m) => m.trim());
-              const rows = [];
+            {teams
+              .sort((a, b) => {
+                // Natural sort for team names with numbers
+                const aName = a.name.replace(/Batch\s+/i, "");
+                const bName = b.name.replace(/Batch\s+/i, "");
+                return aName.localeCompare(bName, undefined, {
+                  numeric: true,
+                  sensitivity: "base",
+                });
+              })
+              .map((team) => {
+                const members = team.members.split(",").map((m) => m.trim());
+                const rows = [];
 
-              // Team Row
-              rows.push(
-                <tr
-                  key={team._id}
-                  className="bg-blue-50 hover:bg-blue-100 cursor-pointer transition-colors border-l-4 border-blue-500"
-                  onClick={() => toggleTeam(team._id)}
-                >
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <span className="text-blue-600 mr-2">
-                        {expandedTeam === team._id ? (
-                          <FaChevronDown />
-                        ) : (
-                          <FaChevronRight />
-                        )}
-                      </span>
-                      <span className="text-lg font-semibold text-blue-800">
-                        {team.name}
-                      </span>
-                    </div>
-                  </td>
-                  {customColumns.map((col) => (
-                    <td 
-                      key={col.name} 
-                      className="px-4 py-4 whitespace-nowrap"
-                      rowSpan={col.type === "team" && col.inputType === "textarea" && expandedTeam === team._id ? members.length + 1 : 1}
-                    >
-                      {col.type === "team" ? (
-                        isHead ? (
-                          <span className="text-gray-700">
-                            {getDisplayValue(team, col) || "-"}
-                          </span>
-                        ) : col.inputType === "options" ? (
-                          <select
-                            value={
-                              getDisplayValue(team, col) ||
-                              (col.options && col.options[0]) ||
-                              ""
-                            }
-                            onChange={(e) =>
-                              updateTeamStatus(
-                                team._id,
-                                col.name,
-                                e.target.value
-                              )
-                            }
-                            className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {col.options &&
-                              col.options.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                          </select>
-                        ) : col.inputType === "textarea" ? (
-                          <textarea
-                            value={getDisplayValue(team, col) || ""}
-                            onChange={(e) =>
-                              updateTeamStatus(
-                                team._id,
-                                col.name,
-                                e.target.value
-                              )
-                            }
-                            className={`px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical ${
-                              expandedTeam === team._id 
-                                ? "w-64 h-32" 
-                                : "w-48 h-16"
-                            }`}
-                            placeholder="Enter remarks..."
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : col.inputType === "number" ? (
-                          <div className="flex flex-col">
+                // Team Row
+                rows.push(
+                  <tr
+                    key={team._id}
+                    className="bg-blue-50 hover:bg-blue-100 cursor-pointer transition-colors border-l-4 border-blue-500"
+                    onClick={() => toggleTeam(team._id)}
+                  >
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <span className="text-blue-600 mr-2">
+                          {expandedTeam === team._id ? (
+                            <FaChevronDown />
+                          ) : (
+                            <FaChevronRight />
+                          )}
+                        </span>
+                        <span className="text-lg font-semibold text-blue-800">
+                          {team.name}
+                        </span>
+                      </div>
+                    </td>
+                    {customColumns.map((col) => (
+                      <td
+                        key={col.name}
+                        className={`px-4 py-4 ${col.inputType === "textarea" ? "whitespace-normal break-words" : "whitespace-nowrap"}`}
+                        rowSpan={
+                          col.type === "team" &&
+                          col.inputType === "textarea" &&
+                          expandedTeam === team._id
+                            ? members.length + 1
+                            : 1
+                        }
+                      >
+                        {col.type === "team" ? (
+                          isHead ? (
+                            col.inputType === "options" ? (
+                              <select
+                                value={
+                                  getDisplayValue(team, col) ||
+                                  (col.options && col.options[0]) ||
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  updateTeamStatus(
+                                    team._id,
+                                    col.name,
+                                    e.target.value
+                                  )
+                                }
+                                className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {col.options &&
+                                  col.options.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                              </select>
+                            ) : col.inputType === "textarea" ? (
+                              <textarea
+                                value={getDisplayValue(team, col) || ""}
+                                onChange={(e) =>
+                                  updateTeamStatus(
+                                    team._id,
+                                    col.name,
+                                    e.target.value
+                                  )
+                                }
+                                className={`px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical whitespace-normal break-words ${
+                                  expandedTeam === team._id
+                                    ? "w-64 h-32"
+                                    : "w-48 h-16"
+                                }`}
+                                placeholder="Enter remarks..."
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : col.inputType === "number" ? (
+                              <div className="flex flex-col">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={col.maxMarks || undefined}
+                                  value={getDisplayValue(team, col) || ""}
+                                  onChange={(e) =>
+                                    updateTeamStatus(
+                                      team._id,
+                                      col.name,
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-24 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder={
+                                    col.maxMarks ? ` ${col.maxMarks}` : ""
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                {col.maxMarks && (
+                                  <span className="text-xs text-gray-500 mt-1">
+                                    /{col.maxMarks}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <input
+                                type="text"
+                                value={getDisplayValue(team, col) || ""}
+                                onChange={(e) =>
+                                  updateTeamStatus(
+                                    team._id,
+                                    col.name,
+                                    e.target.value
+                                  )
+                                }
+                                className="w-24 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            )
+                          ) : col.inputType === "options" ? (
+                            <select
+                              value={
+                                getDisplayValue(team, col) ||
+                                (col.options && col.options[0]) ||
+                                ""
+                              }
+                              onChange={(e) =>
+                                updateTeamStatus(
+                                  team._id,
+                                  col.name,
+                                  e.target.value
+                                )
+                              }
+                              className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {col.options &&
+                                col.options.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                            </select>
+                          ) : col.inputType === "textarea" ? (
+                            <textarea
+                              value={getDisplayValue(team, col) || ""}
+                              onChange={(e) =>
+                                updateTeamStatus(
+                                  team._id,
+                                  col.name,
+                                  e.target.value
+                                )
+                              }
+                              className={`px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical whitespace-normal break-words ${
+                                expandedTeam === team._id
+                                  ? "w-64 h-32"
+                                  : "w-48 h-16"
+                              }`}
+                              placeholder="Enter remarks..."
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : col.inputType === "number" ? (
+                            <div className="flex flex-col">
+                              <input
+                                type="number"
+                                min="0"
+                                max={col.maxMarks || undefined}
+                                value={getDisplayValue(team, col) || ""}
+                                onChange={(e) =>
+                                  updateTeamStatus(
+                                    team._id,
+                                    col.name,
+                                    e.target.value
+                                  )
+                                }
+                                className="w-24 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder={
+                                  col.maxMarks ? ` ${col.maxMarks}` : ""
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              {col.maxMarks && (
+                                <span className="text-xs text-gray-500 mt-1">
+                                  /{col.maxMarks}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
                             <input
-                              type="number"
+                              type="text"
                               value={getDisplayValue(team, col) || ""}
                               onChange={(e) =>
                                 updateTeamStatus(
@@ -428,110 +570,123 @@ function TeamsTable({
                                 )
                               }
                               className="w-24 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              placeholder={
-                                col.maxMarks ? ` ${col.maxMarks}` : ""
-                              }
                               onClick={(e) => e.stopPropagation()}
                             />
-                            {col.maxMarks && (
-                              <span className="text-xs text-gray-500 mt-1">
-                                /{col.maxMarks}
-                              </span>
-                            )}
-                          </div>
+                          )
                         ) : (
-                          <input
-                            type="text"
-                            value={getDisplayValue(team, col) || ""}
-                            onChange={(e) =>
-                              updateTeamStatus(
-                                team._id,
-                                col.name,
-                                e.target.value
-                              )
-                            }
-                            className="w-24 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        )
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                  ))}
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <span className="text-gray-400">-</span>
-                  </td>
-                  {isHead ? (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    ))}
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {activeReview &&
-                      team.reviewData?.[activeReview._id]?._scoringLocked ? (
-                        <span className="px-3 py-1 w-fit bg-red-100 text-red-800 rounded text-sm flex items-center gap-1">
-                          <FaLock />
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 w-fit bg-green-100 text-green-800 rounded text-sm flex items-center gap-1">
-                          <FaUnlock />
-                        </span>
-                      )}
+                      <span className="text-gray-400">-</span>
                     </td>
-                  ) : (
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      {activeReview &&
-                      team.reviewData?.[activeReview._id]?._scoringLocked ? (
-                        <span className="px-3 py-1 w-fit bg-red-400 text-white rounded text-sm flex items-center gap-1">
-                          <FaLock />
-                        </span>
-                      ) : pendingChanges[team._id] ||
-                        absentMembers[team._id] ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            submitChanges(team._id);
-                          }}
-                          disabled={submittingTeam === team._id}
-                          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
-                        >
-                          {submittingTeam === team._id ? "Saving..." : "Submit"}
-                        </button>
-                      ) : (
-                        <span className="px-3 py-1 w-fit bg-green-100 text-green-800 rounded text-sm flex items-center gap-1">
-                          <FaUnlock />
-                        </span>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-
-              // Member Rows (only show if expanded)
-              if (expandedTeam === team._id) {
-                members.forEach((member) => {
-                  rows.push(
-                    <tr
-                      key={`${team._id}-${member}`}
-                      className="bg-gray-50 border-l-4 border-gray-300"
-                    >
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center pl-8">
-                          <FaUser className="text-gray-600 mr-2" />
-                          <span
-                            className={`text-gray-700 ${
-                              (
-                                absentMembers[team._id]?.[member] !== undefined
-                                  ? absentMembers[team._id][member]
-                                  : isAbsentFromSavedData(team._id, member)
-                              )
-                                ? "line-through opacity-50"
-                                : ""
-                            }`}
-                            title={member}
+                    {isHead ? (
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        {activeReview &&
+                        team.reviewData?.[activeReview._id]?._scoringLocked ? (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const response = await fetch(`/api/teams/${team._id}/unlock-scoring`, {
+                                  method: "PUT",
+                                });
+                                if (response.ok) {
+                                  await onDataChange();
+                                } else {
+                                  alert("Error unlocking scoring");
+                                }
+                              } catch (error) {
+                                alert("Error unlocking scoring");
+                              }
+                            }}
+                            className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm flex items-center gap-1"
                           >
-                            {member.match(/\(([^)]+)\)/)
-                              ? member.match(/\(([^)]+)\)/)[1]
-                              : member}
+                            <FaUnlock /> Unlock
+                          </button>
+                        ) : (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const response = await fetch(`/api/teams/${team._id}/lock-scoring`, {
+                                  method: "PUT",
+                                });
+                                if (response.ok) {
+                                  await onDataChange();
+                                } else {
+                                  alert("Error locking scoring");
+                                }
+                              } catch (error) {
+                                alert("Error locking scoring");
+                              }
+                            }}
+                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center gap-1"
+                          >
+                            <FaLock /> Lock
+                          </button>
+                        )}
+                      </td>
+                    ) : (
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        {activeReview &&
+                        team.reviewData?.[activeReview._id]?._scoringLocked ? (
+                          <span className="px-3 py-1 w-fit bg-red-400 text-white rounded text-sm flex items-center gap-1">
+                            <FaLock />
                           </span>
-                          {!isHead && (
+                        ) : pendingChanges[team._id] ||
+                          absentMembers[team._id] ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              submitChanges(team._id);
+                            }}
+                            disabled={submittingTeam === team._id}
+                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
+                          >
+                            {submittingTeam === team._id
+                              ? "Saving..."
+                              : "Submit"}
+                          </button>
+                        ) : (
+                          <span className="px-3 py-1 w-fit bg-green-100 text-green-800 rounded text-sm flex items-center gap-1">
+                            <FaUnlock />
+                          </span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+
+                // Member Rows (only show if expanded)
+                if (expandedTeam === team._id) {
+                  members.forEach((member) => {
+                    rows.push(
+                      <tr
+                        key={`${team._id}-${member}`}
+                        className="bg-gray-50 border-l-4 border-gray-300"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center pl-8">
+                            <FaUser className="text-gray-600 mr-2" />
+                            <span
+                              className={`text-gray-700 ${
+                                (
+                                  absentMembers[team._id]?.[member] !==
+                                  undefined
+                                    ? absentMembers[team._id][member]
+                                    : isAbsentFromSavedData(team._id, member)
+                                )
+                                  ? "line-through opacity-50"
+                                  : ""
+                              }`}
+                              title={member}
+                            >
+                              {member.match(/\(([^)]+)\)/)
+                                ? member.match(/\(([^)]+)\)/)[1]
+                                : member}
+                            </span>
                             <label className="ml-3 flex items-center text-xs">
                               <input
                                 type="checkbox"
@@ -541,87 +696,168 @@ function TeamsTable({
                                     ? absentMembers[team._id][member]
                                     : isAbsentFromSavedData(team._id, member)
                                 }
-                                onChange={() => toggleAbsent(team._id, member)}
+                                onChange={() =>
+                                  toggleAbsent(team._id, member)
+                                }
                                 className="mr-1"
                               />
                               Absent
                             </label>
-                          )}
-                        </div>
-                      </td>
-                      {customColumns.map((col) => {
-                        // Skip rendering cell for team-level textarea columns as they span from team row
-                        if (col.type === "team" && col.inputType === "textarea") {
-                          return null;
-                        }
-                        
-                        return (
-                          <td
-                            key={col.name}
-                            className="px-4 py-3 whitespace-nowrap"
-                          >
-                            {col.type === "individual" ? (
-                              isHead ? (
-                                <span className="text-gray-700">
-                                  {(
+                          </div>
+                        </td>
+                        {customColumns.map((col) => {
+                          // Skip rendering cell for team-level textarea columns as they span from team row
+                          if (
+                            col.type === "team" &&
+                            col.inputType === "textarea"
+                          ) {
+                            return null;
+                          }
+
+                          return (
+                            <td
+                              key={col.name}
+                              className={`px-4 py-3 ${col.inputType === "textarea" ? "whitespace-normal break-words" : "whitespace-nowrap"}`}
+                            >
+                              {col.type === "individual" ? (
+                                isHead ? (
+                                  (
+                                    absentMembers[team._id]?.[member] !==
+                                    undefined
+                                      ? absentMembers[team._id][member]
+                                      : isAbsentFromSavedData(
+                                          team._id,
+                                          member
+                                        )
+                                  ) ? (
+                                    <span className="text-gray-500 italic">
+                                      Absent
+                                    </span>
+                                  ) : col.inputType === "options" ? (
+                                    <select
+                                      value={
+                                        getDisplayValue(team, col, member) ||
+                                        (col.options && col.options[0]) ||
+                                        ""
+                                      }
+                                      onChange={(e) =>
+                                        updateMemberScore(
+                                          team._id,
+                                          col.name,
+                                          member,
+                                          e.target.value
+                                        )
+                                      }
+                                      className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    >
+                                      {col.options &&
+                                        col.options.map((option) => (
+                                          <option key={option} value={option}>
+                                            {option}
+                                          </option>
+                                        ))}
+                                    </select>
+                                  ) : col.inputType === "textarea" ? (
+                                    <textarea
+                                      value={
+                                        getDisplayValue(team, col, member) || ""
+                                      }
+                                      onChange={(e) =>
+                                        updateMemberScore(
+                                          team._id,
+                                          col.name,
+                                          member,
+                                          e.target.value
+                                        )
+                                      }
+                                      className="w-44 h-12 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical whitespace-normal break-words"
+                                      placeholder="Enter remarks..."
+                                    />
+                                  ) : col.inputType === "number" ? (
+                                    <div className="flex flex-col">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max={col.maxMarks || undefined}
+                                        value={
+                                          getDisplayValue(team, col, member) || ""
+                                        }
+                                        onChange={(e) =>
+                                          updateMemberScore(
+                                            team._id,
+                                            col.name,
+                                            member,
+                                            e.target.value
+                                          )
+                                        }
+                                        className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder={
+                                          col.maxMarks ? `${col.maxMarks}` : ""
+                                        }
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col">
+                                      <input
+                                        type="text"
+                                        value={
+                                          getDisplayValue(team, col, member) || ""
+                                        }
+                                        onChange={(e) =>
+                                          updateMemberScore(
+                                            team._id,
+                                            col.name,
+                                            member,
+                                            e.target.value
+                                          )
+                                        }
+                                        className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder={
+                                          col.maxMarks ? `${col.maxMarks}` : ""
+                                        }
+                                      />
+                                      {col.maxMarks && (
+                                        <span className="text-xs text-gray-500 mt-1">
+                                          /{col.maxMarks}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )
+                                ) : (
                                     absentMembers[team._id]?.[member] !==
                                     undefined
                                       ? absentMembers[team._id][member]
                                       : isAbsentFromSavedData(team._id, member)
-                                  )
-                                    ? "Absent"
-                                    : getDisplayValue(team, col, member) || "-"}
-                                </span>
-                              ) : (
-                                  absentMembers[team._id]?.[member] !== undefined
-                                    ? absentMembers[team._id][member]
-                                    : isAbsentFromSavedData(team._id, member)
-                                ) ? (
-                                <span className="text-gray-500 italic">
-                                  Absent
-                                </span>
-                              ) : col.inputType === "options" ? (
-                                <select
-                                  value={
-                                    getDisplayValue(team, col, member) ||
-                                    (col.options && col.options[0]) ||
-                                    ""
-                                  }
-                                  onChange={(e) =>
-                                    updateMemberScore(
-                                      team._id,
-                                      col.name,
-                                      member,
-                                      e.target.value
-                                    )
-                                  }
-                                  className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                >
-                                  {col.options &&
-                                    col.options.map((option) => (
-                                      <option key={option} value={option}>
-                                        {option}
-                                      </option>
-                                    ))}
-                                </select>
-                              ) : col.inputType === "textarea" ? (
-                                <textarea
-                                  value={getDisplayValue(team, col, member) || ""}
-                                  onChange={(e) =>
-                                    updateMemberScore(
-                                      team._id,
-                                      col.name,
-                                      member,
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-44 h-12 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-                                  placeholder="Enter remarks..."
-                                />
-                              ) : col.inputType === "number" ? (
-                                <div className="flex flex-col">
-                                  <input
-                                    type="number"
+                                  ) ? (
+                                  <span className="text-gray-500 italic">
+                                    Absent
+                                  </span>
+                                ) : col.inputType === "options" ? (
+                                  <select
+                                    value={
+                                      getDisplayValue(team, col, member) ||
+                                      (col.options && col.options[0]) ||
+                                      ""
+                                    }
+                                    onChange={(e) =>
+                                      updateMemberScore(
+                                        team._id,
+                                        col.name,
+                                        member,
+                                        e.target.value
+                                      )
+                                    }
+                                    className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  >
+                                    {col.options &&
+                                      col.options.map((option) => (
+                                        <option key={option} value={option}>
+                                          {option}
+                                        </option>
+                                      ))}
+                                  </select>
+                                ) : col.inputType === "textarea" ? (
+                                  <textarea
                                     value={
                                       getDisplayValue(team, col, member) || ""
                                     }
@@ -633,58 +869,78 @@ function TeamsTable({
                                         e.target.value
                                       )
                                     }
-                                    className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder={
-                                      col.maxMarks ? `${col.maxMarks}` : ""
-                                    }
+                                    className="w-44 h-12 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical whitespace-normal break-words"
+                                    placeholder="Enter remarks..."
                                   />
-                                </div>
+                                ) : col.inputType === "number" ? (
+                                  <div className="flex flex-col">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={col.maxMarks || undefined}
+                                      value={
+                                        getDisplayValue(team, col, member) || ""
+                                      }
+                                      onChange={(e) =>
+                                        updateMemberScore(
+                                          team._id,
+                                          col.name,
+                                          member,
+                                          e.target.value
+                                        )
+                                      }
+                                      className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      placeholder={
+                                        col.maxMarks ? `${col.maxMarks}` : ""
+                                      }
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col">
+                                    <input
+                                      type="text"
+                                      value={
+                                        getDisplayValue(team, col, member) || ""
+                                      }
+                                      onChange={(e) =>
+                                        updateMemberScore(
+                                          team._id,
+                                          col.name,
+                                          member,
+                                          e.target.value
+                                        )
+                                      }
+                                      className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      placeholder={
+                                        col.maxMarks ? `${col.maxMarks}` : ""
+                                      }
+                                    />
+                                    {col.maxMarks && (
+                                      <span className="text-xs text-gray-500 mt-1">
+                                        /{col.maxMarks}
+                                      </span>
+                                    )}
+                                  </div>
+                                )
                               ) : (
-                                <div className="flex flex-col">
-                                  <input
-                                    type="text"
-                                    value={
-                                      getDisplayValue(team, col, member) || ""
-                                    }
-                                    onChange={(e) =>
-                                      updateMemberScore(
-                                        team._id,
-                                        col.name,
-                                        member,
-                                        e.target.value
-                                      )
-                                    }
-                                    className="w-20 px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder={
-                                      col.maxMarks ? `${col.maxMarks}` : ""
-                                    }
-                                  />
-                                  {col.maxMarks && (
-                                    <span className="text-xs text-gray-500 mt-1">
-                                      /{col.maxMarks}
-                                    </span>
-                                  )}
-                                </div>
-                              )
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="font-semibold text-blue-600">
-                          {calculateMemberTotal(team, member)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3"></td>
-                    </tr>
-                  );
-                });
-              }
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="font-semibold text-blue-600">
+                            {calculateMemberTotal(team, member)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3"></td>
+                      </tr>
+                    );
+                  });
+                }
 
-              return rows;
-            })}
+                return rows;
+              })}
           </tbody>
         </table>
       </div>

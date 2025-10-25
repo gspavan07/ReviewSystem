@@ -311,23 +311,26 @@ function HeadDashboard({
   const previewReport = (type, section = null) => {
     let data = { headers: [], rows: [] };
     let filteredTeams = teams;
-    
+
     // Filter teams based on type
-    if (type === 'section' && section) {
-      filteredTeams = teams.filter(team => 
-        team.name.replace('Batch ', '').charAt(0).toUpperCase() === section
+    if (type === "section" && section) {
+      filteredTeams = teams.filter(
+        (team) =>
+          team.name.replace("Batch ", "").charAt(0).toUpperCase() === section
       );
-    } else if (type === 'batch' && section) {
-      filteredTeams = teams.filter(team => team.name === section);
+    } else if (type === "batch" && section) {
+      filteredTeams = teams.filter((team) => team.name === section);
     }
-    
+
     if (type === "attendance") {
       data.headers = ["Team", "Member", "Status"];
-      filteredTeams.forEach(team => {
+      filteredTeams.forEach((team) => {
         data.rows.push([team.name, "", ""]); // Team header row
-        const members = team.members.split(",").map(m => m.trim());
-        members.forEach(member => {
-          const isAbsent = activeReview && team.reviewData?.[activeReview._id]?._absentMembers?.[member];
+        const members = team.members.split(",").map((m) => m.trim());
+        members.forEach((member) => {
+          const isAbsent =
+            activeReview &&
+            team.reviewData?.[activeReview._id]?._absentMembers?.[member];
           data.rows.push(["", `  ${member}`, isAbsent ? "Absent" : "Present"]); // Indented member
         });
       });
@@ -338,26 +341,38 @@ function HeadDashboard({
     } else {
       // Score reports with hierarchical format
       data.headers = ["Team/Member", "Roll No", "Project Title", "Guide"];
-      customColumns.forEach(col => {
+      customColumns.forEach((col) => {
         data.headers.push(col.name);
       });
       data.headers.push("Total", "Reviewers");
-      
-      filteredTeams.forEach(team => {
-        const members = team.members.split(",").map(m => m.trim());
-        
+
+      filteredTeams.forEach((team) => {
+        const members = team.members.split(",").map((m) => m.trim());
+
         // Team header row
-        const sectionLetter = team.name.replace("Batch ", "").charAt(0).toUpperCase();
-        const teamReviewers = users.filter(user => 
-          user.role === "reviewer" && 
-          (user.assignedSections?.includes(sectionLetter) || user.assignedSections?.includes(team.name))
-        ).map(user => user.name).join(", ") || "None";
-        
-        const teamRow = [team.name, "", team.projectTitle || "", team.guide || ""];
-        customColumns.forEach(col => {
+        const submittedBy =
+          (activeReview && team.reviewData?.[activeReview._id]?._submittedBy) ||
+          "Not submitted";
+
+        const teamRow = [
+          team.name,
+          "",
+          team.projectTitle || "",
+          team.guide || "",
+        ];
+        customColumns.forEach((col) => {
           if (col.type === "team") {
-            let value = activeReview && team.reviewData?.[activeReview._id]?.[col.name] || team[col.name] || "";
-            if (!value && col.inputType === "options" && col.options && col.options.length > 0) {
+            let value =
+              (activeReview &&
+                team.reviewData?.[activeReview._id]?.[col.name]) ||
+              team[col.name] ||
+              "";
+            if (
+              !value &&
+              col.inputType === "options" &&
+              col.options &&
+              col.options.length > 0
+            ) {
               value = col.options[0];
             }
             teamRow.push(String(value));
@@ -365,31 +380,50 @@ function HeadDashboard({
             teamRow.push(""); // Empty for individual columns at team level
           }
         });
-        teamRow.push("", teamReviewers); // Empty total, then reviewers for team row
+        teamRow.push("", submittedBy); // Empty total, then submitting reviewer for team row
         data.rows.push(teamRow);
-        
+
         // Member rows (indented)
-        members.forEach(member => {
+        members.forEach((member) => {
           // Extract name and roll number
           const rollMatch = member.match(/\(([^)]+)\)$/);
           const rollNo = rollMatch ? rollMatch[1] : "";
-          const memberName = rollMatch ? member.replace(/\s*\([^)]+\)$/, "").trim() : member;
-          
+          const memberName = rollMatch
+            ? member.replace(/\s*\([^)]+\)$/, "").trim()
+            : member;
+
           const memberRow = [`  ${memberName}`, rollNo, "", ""]; // Indented member name, roll no
-          const isAbsent = activeReview && team.reviewData?.[activeReview._id]?._absentMembers?.[member];
+          const isAbsent =
+            activeReview &&
+            team.reviewData?.[activeReview._id]?._absentMembers?.[member];
           let total = 0;
-          
-          customColumns.forEach(col => {
+
+          customColumns.forEach((col) => {
             if (col.type === "individual") {
               if (isAbsent) {
                 memberRow.push("Absent");
               } else {
-                let value = activeReview && team.reviewData?.[activeReview._id]?.[col.name]?.[member] || team[col.name]?.[member] || "";
-                if (!value && col.inputType === "options" && col.options && col.options.length > 0) {
+                let value =
+                  (activeReview &&
+                    team.reviewData?.[activeReview._id]?.[col.name]?.[
+                      member
+                    ]) ||
+                  team[col.name]?.[member] ||
+                  "";
+                if (
+                  !value &&
+                  col.inputType === "options" &&
+                  col.options &&
+                  col.options.length > 0
+                ) {
                   value = col.options[0];
                 }
                 // Add to total if it's a number
-                if (col.inputType === "number" && value && !isNaN(parseFloat(value))) {
+                if (
+                  col.inputType === "number" &&
+                  value &&
+                  !isNaN(parseFloat(value))
+                ) {
                   total += parseFloat(value);
                 }
                 memberRow.push(String(value));
@@ -398,17 +432,23 @@ function HeadDashboard({
               memberRow.push(""); // Empty for team columns at member level
             }
           });
-          
+
           // Add total score and empty reviewers column
           memberRow.push(isAbsent ? "Absent" : String(total), "");
           data.rows.push(memberRow);
         });
-        
+
         // Add empty row between teams
-        data.rows.push(["", "", "", "", ...Array(customColumns.length + 2).fill("")]);
+        data.rows.push([
+          "",
+          "",
+          "",
+          "",
+          ...Array(customColumns.length + 2).fill(""),
+        ]);
       });
     }
-    
+
     setReportPreview({ type, section, data });
     setShowPreview(true);
   };
@@ -583,7 +623,7 @@ function HeadDashboard({
     setEditingTeam(team._id);
     setEditTeamData({
       name: team.name,
-      members: team.members.split(",").map(m => m.trim()),
+      members: team.members.split(",").map((m) => m.trim()),
       projectTitle: team.projectTitle || "",
       guide: team.guide || "",
     });
@@ -592,14 +632,14 @@ function HeadDashboard({
   const addMember = () => {
     setEditTeamData({
       ...editTeamData,
-      members: [...editTeamData.members, ""]
+      members: [...editTeamData.members, ""],
     });
   };
 
   const removeMember = (index) => {
     setEditTeamData({
       ...editTeamData,
-      members: editTeamData.members.filter((_, i) => i !== index)
+      members: editTeamData.members.filter((_, i) => i !== index),
     });
   };
 
@@ -608,12 +648,16 @@ function HeadDashboard({
     newMembers[index] = value;
     setEditTeamData({
       ...editTeamData,
-      members: newMembers
+      members: newMembers,
     });
   };
 
   const updateTeam = async () => {
-    if (!editTeamData.name || !editTeamData.members.length || editTeamData.members.some(m => !m.trim())) {
+    if (
+      !editTeamData.name ||
+      !editTeamData.members.length ||
+      editTeamData.members.some((m) => !m.trim())
+    ) {
       showToast("Please fill in team name and all member names", "error");
       return;
     }
@@ -626,7 +670,7 @@ function HeadDashboard({
         body: JSON.stringify({
           ...editTeamData,
           members: editTeamData.members.join(", "),
-          isBasicUpdate: true
+          isBasicUpdate: true,
         }),
       });
 
@@ -954,25 +998,29 @@ function HeadDashboard({
 
     const sessionId = Date.now().toString();
     setIsImporting(true);
-    setImportProgress({ progress: 0, message: 'Starting import...', step: 'init' });
+    setImportProgress({
+      progress: 0,
+      message: "Starting import...",
+      step: "init",
+    });
 
     // Start SSE connection for progress updates
     const eventSource = new EventSource(`/api/import-progress/${sessionId}`);
-    
+
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      
-      if (data.type === 'progress') {
+
+      if (data.type === "progress") {
         setImportProgress({
           progress: data.progress,
           message: data.message,
-          step: data.step
+          step: data.step,
         });
-      } else if (data.type === 'error') {
+      } else if (data.type === "error") {
         setImportProgress({
           progress: 0,
           message: data.message,
-          step: 'error'
+          step: "error",
         });
         showToast(`Import failed: ${data.message}`, "error");
         setIsImporting(false);
@@ -999,14 +1047,14 @@ function HeadDashboard({
         showToast(`Successfully imported ${result.teams.length} teams!`);
         await onDataChange();
         event.target.value = "";
-        
+
         // Final progress update
         setImportProgress({
           progress: 100,
           message: `Import completed! Created ${result.teams.length} teams`,
-          step: 'complete'
+          step: "complete",
         });
-        
+
         // Hide progress after delay
         setTimeout(() => {
           setImportProgress(null);
@@ -1018,7 +1066,7 @@ function HeadDashboard({
         setImportProgress(null);
         setIsImporting(false);
       }
-      
+
       eventSource.close();
     } catch (error) {
       showToast("Error importing file", "error");
@@ -1029,24 +1077,30 @@ function HeadDashboard({
   };
 
   const sendLoginDetailsToAll = async () => {
-    if (!window.confirm('Send login details to all team members? This will send emails to all students.')) {
+    if (
+      !window.confirm(
+        "Send login details to all team members? This will send emails to all students."
+      )
+    ) {
       return;
     }
 
     setIsSendingEmails(true);
     try {
-      const response = await fetch('/api/email/send-login-details', {
-        method: 'POST'
+      const response = await fetch("/api/email/send-login-details", {
+        method: "POST",
       });
 
       if (response.ok) {
         const result = await response.json();
-        showToast(`Emails sent to ${result.results.length} teams successfully!`);
+        showToast(
+          `Emails sent to ${result.results.length} teams successfully!`
+        );
       } else {
-        showToast('Error sending emails', 'error');
+        showToast("Error sending emails", "error");
       }
     } catch (error) {
-      showToast('Error sending emails', 'error');
+      showToast("Error sending emails", "error");
     } finally {
       setIsSendingEmails(false);
     }
@@ -1103,7 +1157,7 @@ function HeadDashboard({
               </div>
             </div>
 
-            <div className="bg-blue-50 p-6 rounded-lg mb-6 border-l-4 border-blue-500">
+            {/* <div className="bg-blue-50 p-6 rounded-lg mb-6 border-l-4 border-blue-500">
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
                 Send Login Details
               </h4>
@@ -1130,7 +1184,7 @@ function HeadDashboard({
               <p className="text-xs text-gray-600 mt-2 italic">
                 This will send login credentials to all team members via email
               </p>
-            </div>
+            </div> */}
 
             <div className="bg-green-50 p-6 rounded-lg mb-6 border-l-4 border-green-500">
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
@@ -1141,13 +1195,15 @@ function HeadDashboard({
                 accept=".xlsx,.xls"
                 onChange={handleFileUpload}
                 disabled={isImporting}
-                className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${
+                  isImporting ? "opacity-50 cursor-not-allowed" : ""
+                }`}
               />
               <p className="text-xs text-gray-600 mt-2 italic">
                 Excel should have: "Batch No.", "Student Name", "Roll No.",
                 "Project Title", "Guide"
               </p>
-              
+
               {/* Progress Bar */}
               {importProgress && (
                 <div className="mt-4 p-4 bg-white rounded-lg border border-green-200">
@@ -1160,21 +1216,26 @@ function HeadDashboard({
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
+                    <div
                       className={`h-2 rounded-full transition-all duration-300 ${
-                        importProgress.step === 'error' ? 'bg-red-500' : 
-                        importProgress.step === 'complete' ? 'bg-green-500' : 'bg-blue-500'
+                        importProgress.step === "error"
+                          ? "bg-red-500"
+                          : importProgress.step === "complete"
+                          ? "bg-green-500"
+                          : "bg-blue-500"
                       }`}
                       style={{ width: `${importProgress.progress}%` }}
                     ></div>
                   </div>
-                  {importProgress.step === 'complete' && (
+                  {importProgress.step === "complete" && (
                     <div className="flex items-center mt-2 text-green-600">
                       <FaCheck className="mr-2" />
-                      <span className="text-sm font-medium">Import completed successfully!</span>
+                      <span className="text-sm font-medium">
+                        Import completed successfully!
+                      </span>
                     </div>
                   )}
-                  {importProgress.step === 'error' && (
+                  {importProgress.step === "error" && (
                     <div className="flex items-center mt-2 text-red-600">
                       <FaTimes className="mr-2" />
                       <span className="text-sm font-medium">Import failed</span>
@@ -1189,65 +1250,90 @@ function HeadDashboard({
                 Team List
               </h4>
               <div className="space-y-3">
-                {teams.map((team) => (
-                  <div
-                    key={team._id}
-                    className="bg-white p-4 rounded-lg border border-gray-200"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h5 className="font-semibold text-gray-800">
-                          {team.name}
-                        </h5>
-                        <p className="text-gray-600 text-sm mt-1">
-                          Members: {team.members.split(",").length}
-                        </p>
-                        {team.projectTitle && (
-                          <p className="text-gray-600 text-sm">
-                            Project: {team.projectTitle}
+                {teams
+                  .sort((a, b) => {
+                    // Natural sort for team names with numbers
+                    const aName = a.name.replace(/Batch\s+/i, "");
+                    const bName = b.name.replace(/Batch\s+/i, "");
+                    return aName.localeCompare(bName, undefined, {
+                      numeric: true,
+                      sensitivity: "base",
+                    });
+                  })
+                  .map((team) => (
+                    <div
+                      key={team._id}
+                      className="bg-white p-4 rounded-lg border border-gray-200"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h5 className="font-semibold text-gray-800">
+                            {team.name}
+                          </h5>
+                          <p className="text-gray-600 text-sm mt-1">
+                            Members: {team.members.split(",").length}
                           </p>
-                        )}
-                        {team.guide && (
-                          <p className="text-gray-600 text-sm">
-                            Guide: {team.guide}
-                          </p>
-                        )}
-                        <div className="mt-2">
-                          {(activeReview && team.reviewData?.[activeReview._id]?._scoringLocked) ? (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              <FaLock className="mr-1" /> Scoring Locked
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <FaUnlock className="mr-1" /> Scoring Unlocked
-                            </span>
+                          {team.projectTitle && (
+                            <p className="text-gray-600 text-sm">
+                              Project: {team.projectTitle}
+                            </p>
                           )}
+                          {team.guide && (
+                            <p className="text-gray-600 text-sm">
+                              Guide: {team.guide}
+                            </p>
+                          )}
+                          <div className="mt-2">
+                            {activeReview &&
+                            team.reviewData?.[activeReview._id]
+                              ?._scoringLocked ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <FaLock className="mr-1" /> Scoring Locked
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <FaUnlock className="mr-1" /> Scoring Unlocked
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {(activeReview && team.reviewData?.[activeReview._id]?._scoringLocked) && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const response = await fetch(`/api/teams/${team._id}/unlock-scoring`, {
-                                  method: "PUT",
-                                });
-                                if (response.ok) {
-                                  await onDataChange();
-                                  showToast("Team scoring unlocked successfully!");
-                                } else {
-                                  showToast("Error unlocking scoring", "error");
-                                }
-                              } catch (error) {
-                                showToast("Error unlocking scoring", "error");
-                              }
-                            }}
-                            className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm flex items-center gap-1"
-                          >
-                            <FaUnlock /> Unlock
-                          </button>
-                        )}
-                        <button
+                        <div className="flex gap-2">
+                          {activeReview &&
+                            team.reviewData?.[activeReview._id]
+                              ?._scoringLocked && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const response = await fetch(
+                                      `/api/teams/${team._id}/unlock-scoring`,
+                                      {
+                                        method: "PUT",
+                                      }
+                                    );
+                                    if (response.ok) {
+                                      await onDataChange();
+                                      showToast(
+                                        "Team scoring unlocked successfully!"
+                                      );
+                                    } else {
+                                      showToast(
+                                        "Error unlocking scoring",
+                                        "error"
+                                      );
+                                    }
+                                  } catch (error) {
+                                    showToast(
+                                      "Error unlocking scoring",
+                                      "error"
+                                    );
+                                  }
+                                }}
+                                className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm flex items-center gap-1"
+                              >
+                                <FaUnlock /> Unlock
+                              </button>
+                            )}
+                          {/* <button
                           onClick={async () => {
                             if (window.confirm(`Send login details to ${team.name} members?`)) {
                               try {
@@ -1267,40 +1353,40 @@ function HeadDashboard({
                           className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
                         >
                           📧 Email
-                        </button>
-                        <button
-                          onClick={() => startEditTeam(team)}
-                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
-                        >
-                          <FaEdit /> Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (
-                              confirm(
-                                "Are you sure you want to delete this team?"
-                              )
-                            ) {
-                              fetch(`/api/teams/${team._id}`, {
-                                method: "DELETE",
-                              })
-                                .then(() => {
-                                  onDataChange();
-                                  showToast("Team deleted successfully!");
+                        </button> */}
+                          <button
+                            onClick={() => startEditTeam(team)}
+                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
+                          >
+                            <FaEdit /> Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "Are you sure you want to delete this team?"
+                                )
+                              ) {
+                                fetch(`/api/teams/${team._id}`, {
+                                  method: "DELETE",
                                 })
-                                .catch(() =>
-                                  showToast("Error deleting team", "error")
-                                );
-                            }
-                          }}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center gap-1"
-                        >
-                          <FaTrash /> Delete
-                        </button>
+                                  .then(() => {
+                                    onDataChange();
+                                    showToast("Team deleted successfully!");
+                                  })
+                                  .catch(() =>
+                                    showToast("Error deleting team", "error")
+                                  );
+                              }
+                            }}
+                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm flex items-center gap-1"
+                          >
+                            <FaTrash /> Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
                 {teams.length === 0 && (
                   <p className="text-gray-500 text-center py-8">
                     No teams created yet. Add teams manually or import from
@@ -1315,24 +1401,6 @@ function HeadDashboard({
       case "teams-overview":
         return (
           <div className="bg-white p-8 rounded-xl shadow-lg">
-            <div className="flex justify-between">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">
-                Teams Overview
-              </h3>
-              <select
-                value={filterSection}
-                onChange={(e) => setFilterSection(e.target.value)}
-                className="px-4 py-2 mb-6 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="All">All Sections</option>
-                {getTeamSections().map((section) => (
-                  <option key={section} value={section}>
-                    {section}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <TeamsTable
               teams={filteredTeams}
               customColumns={customColumns}
@@ -1707,7 +1775,8 @@ function HeadDashboard({
                             ({user.username})
                           </span>
                           <div className="text-sm text-gray-600 mt-1">
-                            Sections: {user.assignedSections?.join(", ") || "None"}
+                            Sections:{" "}
+                            {user.assignedSections?.join(", ") || "None"}
                           </div>
                         </div>
                         <button
@@ -2747,7 +2816,10 @@ function HeadDashboard({
                 type="text"
                 value={editTeamData.projectTitle}
                 onChange={(e) =>
-                  setEditTeamData({ ...editTeamData, projectTitle: e.target.value })
+                  setEditTeamData({
+                    ...editTeamData,
+                    projectTitle: e.target.value,
+                  })
                 }
                 placeholder="Project Title (optional)"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -2801,7 +2873,9 @@ function HeadDashboard({
           <div className="bg-white rounded-lg p-6 w-5/6 h-5/6 mx-4 flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-800">
-                {reportPreview.type.charAt(0).toUpperCase() + reportPreview.type.slice(1)} Report Preview
+                {reportPreview.type.charAt(0).toUpperCase() +
+                  reportPreview.type.slice(1)}{" "}
+                Report Preview
                 {reportPreview.section && ` - ${reportPreview.section}`}
               </h3>
               <div className="flex gap-2">
@@ -2827,7 +2901,10 @@ function HeadDashboard({
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
                     {reportPreview.data.headers?.map((header, index) => (
-                      <th key={index} className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                      <th
+                        key={index}
+                        className="px-3 py-2 text-left font-medium text-gray-700 border-b"
+                      >
                         {header}
                       </th>
                     ))}
@@ -2835,9 +2912,15 @@ function HeadDashboard({
                 </thead>
                 <tbody>
                   {reportPreview.data.rows?.map((row, rowIndex) => (
-                    <tr key={rowIndex} className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                    <tr
+                      key={rowIndex}
+                      className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                    >
                       {row.map((cell, cellIndex) => (
-                        <td key={cellIndex} className="px-3 py-2 border-b text-gray-600">
+                        <td
+                          key={cellIndex}
+                          className="px-3 py-2 border-b text-gray-600"
+                        >
                           {cell || "-"}
                         </td>
                       ))}
@@ -2845,7 +2928,8 @@ function HeadDashboard({
                   ))}
                 </tbody>
               </table>
-              {(!reportPreview.data.rows || reportPreview.data.rows.length === 0) && (
+              {(!reportPreview.data.rows ||
+                reportPreview.data.rows.length === 0) && (
                 <div className="p-8 text-center text-gray-500">
                   No data available for this report
                 </div>

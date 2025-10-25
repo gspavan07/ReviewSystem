@@ -57,10 +57,7 @@ const generateReport = async (req, res) => {
       filteredTeams.forEach(team => {
         const members = team.members.split(',').map(m => m.trim());
         
-        const sectionLetter = team.name.replace('Batch ', '').charAt(0).toUpperCase();
-        const teamReviewers = users.filter(user => 
-          user.assignedSections?.includes(sectionLetter) || user.assignedSections?.includes(team.name)
-        ).map(user => user.name).join(', ') || 'None';
+        const submittedBy = activeReview && team.reviewData?.[activeReview._id]?._submittedBy || 'Not submitted';
         
         const teamRow = [team.name, '', team.projectTitle || '', team.guide || ''];
         columns.forEach(col => {
@@ -74,7 +71,7 @@ const generateReport = async (req, res) => {
             teamRow.push('');
           }
         });
-        teamRow.push('', teamReviewers);
+        teamRow.push('', submittedBy);
         worksheetData.push(teamRow);
         
         members.forEach(member => {
