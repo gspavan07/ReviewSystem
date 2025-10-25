@@ -323,24 +323,102 @@ function HeadDashboard({
     }
 
     if (type === "attendance") {
-      data.headers = ["Team", "Member", "Status"];
+      data.headers = ["Team", "Roll No", "Member Name", "Status"];
       filteredTeams.forEach((team) => {
-        data.rows.push([team.name, "", ""]); // Team header row
+        data.rows.push([team.name, "", "", ""]); // Team header row
         const members = team.members.split(",").map((m) => m.trim());
+        const isTeamSubmitted = activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
+        
         members.forEach((member) => {
-          const isAbsent =
-            activeReview &&
-            team.reviewData?.[activeReview._id]?._absentMembers?.[member];
-          data.rows.push(["", `  ${member}`, isAbsent ? "Absent" : "Present"]); // Indented member
+          const rollMatch = member.match(/\(([^)]+)\)$/);
+          const rollNo = rollMatch ? rollMatch[1] : "";
+          const memberName = rollMatch ? member.replace(/\s*\([^)]+\)$/, "").trim() : member;
+          
+          let status = "";
+          if (isTeamSubmitted) {
+            const isAbsent = team.reviewData?.[activeReview._id]?._absentMembers?.[member];
+            status = isAbsent ? "Absent" : "Present";
+          }
+          
+          data.rows.push(["", rollNo, memberName, status]);
         });
       });
     } else if (type === "submissions") {
       data.headers = ["Team", "Requirement", "File", "Upload Date"];
       // This would need submissions data from backend
       data.rows.push(["No submission data available in preview", "", "", ""]);
+    } else if (type === "review" && activeReview) {
+      // Analytics for review report
+      data.headers = ["Review Analytics", "Value"];
+      
+      let submittedCount = 0;
+      let totalStudents = 0;
+      let absentCount = 0;
+      
+      filteredTeams.forEach(team => {
+        const members = team.members.split(",").map(m => m.trim());
+        totalStudents += members.length;
+        
+        if (team.reviewData?.[activeReview._id]?._submittedBy) {
+          submittedCount++;
+        }
+        
+        members.forEach(member => {
+          if (team.reviewData?.[activeReview._id]?._absentMembers?.[member]) {
+            absentCount++;
+          }
+        });
+      });
+      
+      data.rows.push(["Review Name", activeReview.name]);
+      data.rows.push(["Description", activeReview.description || "N/A"]);
+      data.rows.push(["Total Teams", filteredTeams.length]);
+      data.rows.push(["Teams with Scoring Submitted", submittedCount]);
+      data.rows.push(["Teams with Scoring Pending", filteredTeams.length - submittedCount]);
+      data.rows.push(["Total Students", totalStudents]);
+      data.rows.push(["Students Present", totalStudents - absentCount]);
+      data.rows.push(["Students Absent", absentCount]);
+      
+      // Column analytics
+      if (customColumns.length > 0) {
+        data.rows.push(["", ""]);
+        data.rows.push(["Column Analytics", ""]);
+        
+        customColumns.forEach(col => {
+          if (col.inputType === "number") {
+            let scores = [];
+            
+            filteredTeams.forEach(team => {
+              if (col.type === "team") {
+                const value = team.reviewData?.[activeReview._id]?.[col.name];
+                if (value && !isNaN(parseFloat(value))) {
+                  scores.push(parseFloat(value));
+                }
+              } else {
+                const members = team.members.split(",").map(m => m.trim());
+                members.forEach(member => {
+                  const value = team.reviewData?.[activeReview._id]?.[col.name]?.[member];
+                  if (value && !isNaN(parseFloat(value))) {
+                    scores.push(parseFloat(value));
+                  }
+                });
+              }
+            });
+            
+            if (scores.length > 0) {
+              const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2);
+              const max = Math.max(...scores);
+              const min = Math.min(...scores);
+              data.rows.push([`${col.name} (Avg/Max/Min)`, `${avg}/${max}/${min}`]);
+            } else {
+              data.rows.push([`${col.name}`, "No data"]);
+            }
+          }
+        });
+      }
     } else {
       // Score reports with hierarchical format
-      data.headers = ["Team/Member", "Roll No", "Project Title", "Guide"];
+      data.headers = ["Batch Name", "Roll No", "Member Name", "Project Title", "Guide"];
       customColumns.forEach((col) => {
         data.headers.push(col.name);
       });
@@ -350,12 +428,16 @@ function HeadDashboard({
         const members = team.members.split(",").map((m) => m.trim());
 
         // Team header row
-        const submittedBy =
-          (activeReview && team.reviewData?.[activeReview._id]?._submittedBy) ||
-          "Not submitted";
+        const submittedByUsername = activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
+        let submittedBy = 'Not submitted';
+        if (submittedByUsername) {
+          const reviewer = users.find(u => u.username === submittedByUsername);
+          submittedBy = reviewer ? reviewer.name || submittedByUsername : submittedByUsername;
+        }
 
         const teamRow = [
           team.name,
+          "",
           "",
           team.projectTitle || "",
           team.guide || "",
@@ -392,7 +474,7 @@ function HeadDashboard({
             ? member.replace(/\s*\([^)]+\)$/, "").trim()
             : member;
 
-          const memberRow = [`  ${memberName}`, rollNo, "", ""]; // Indented member name, roll no
+          const memberRow = [team.name, rollNo, memberName, "", ""]; // Batch name, roll no, member name, project title, guide
           const isAbsent =
             activeReview &&
             team.reviewData?.[activeReview._id]?._absentMembers?.[member];
@@ -464,7 +546,8 @@ function HeadDashboard({
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${type}_report_${
+        const reviewPrefix = activeReview ? `${activeReview.name.replace(/\s+/g, '_')}_` : '';
+        a.download = `${reviewPrefix}${type}_report_${
           new Date().toISOString().split("T")[0]
         }.xlsx`;
         document.body.appendChild(a);

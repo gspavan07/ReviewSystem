@@ -26,18 +26,33 @@ const generateReport = async (req, res) => {
       filename = `batch_${section.replace(/\s+/g, '_')}`;
     }
     
+    // Add review name to filename if available
+    if (activeReview) {
+      filename = `${activeReview.name.replace(/\s+/g, '_')}_${filename}`;
+    }
+    
     const workbook = xlsx.utils.book_new();
     const worksheetData = [];
     
     if (type === 'attendance') {
-      worksheetData.push(['Team', 'Member', 'Status']);
+      worksheetData.push(['Team', 'Roll No', 'Member Name', 'Status']);
       filteredTeams.forEach(team => {
-        worksheetData.push([team.name, '', '']);
+        worksheetData.push([team.name, '', '', '']);
         const members = team.members.split(',').map(m => m.trim());
+        const isTeamSubmitted = activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
+        
         members.forEach(member => {
-          const isAbsent = activeReview && team.reviewData?.[activeReview._id]?._absentMembers?.[member];
-          const status = isAbsent ? 'Absent' : 'Present';
-          worksheetData.push(['', `  ${member}`, status]);
+          const rollMatch = member.match(/\(([^)]+)\)$/);
+          const rollNo = rollMatch ? rollMatch[1] : '';
+          const memberName = rollMatch ? member.replace(/\s*\([^)]+\)$/, '').trim() : member;
+          
+          let status = '';
+          if (isTeamSubmitted) {
+            const isAbsent = team.reviewData?.[activeReview._id]?._absentMembers?.[member];
+            status = isAbsent ? 'Absent' : 'Present';
+          }
+          
+          worksheetData.push(['', rollNo, memberName, status]);
         });
       });
     } else if (type === 'submissions') {
@@ -46,8 +61,80 @@ const generateReport = async (req, res) => {
       submissions.forEach(sub => {
         worksheetData.push([sub.batchName, sub.requirementId?.title || 'N/A', sub.originalName, new Date(sub.uploadedAt).toLocaleDateString()]);
       });
+    } else if (type === 'review' && activeReview) {
+      // Analytics for review report
+      worksheetData.push(['Review Analytics Summary']);
+      worksheetData.push(['Review Name:', activeReview.name]);
+      worksheetData.push(['Description:', activeReview.description || 'N/A']);
+      worksheetData.push(['Total Teams:', filteredTeams.length]);
+      
+      let submittedCount = 0;
+      let totalStudents = 0;
+      let absentCount = 0;
+      
+      filteredTeams.forEach(team => {
+        const members = team.members.split(',').map(m => m.trim());
+        totalStudents += members.length;
+        
+        if (team.reviewData?.[activeReview._id]?._submittedBy) {
+          submittedCount++;
+        }
+        
+        members.forEach(member => {
+          if (team.reviewData?.[activeReview._id]?._absentMembers?.[member]) {
+            absentCount++;
+          }
+        });
+      });
+      
+      worksheetData.push(['Teams with Scoring Submitted:', submittedCount]);
+      worksheetData.push(['Teams with Scoring Pending:', filteredTeams.length - submittedCount]);
+      worksheetData.push(['Total Students:', totalStudents]);
+      worksheetData.push(['Students Present:', totalStudents - absentCount]);
+      worksheetData.push(['Students Absent:', absentCount]);
+      worksheetData.push(['']);
+      
+      // Column-wise analytics
+      if (columns.length > 0) {
+        worksheetData.push(['Column Analytics:']);
+        worksheetData.push(['Column Name', 'Type', 'Avg Score', 'Max Score', 'Min Score']);
+        
+        columns.forEach(col => {
+          if (col.inputType === 'number') {
+            let scores = [];
+            
+            filteredTeams.forEach(team => {
+              if (col.type === 'team') {
+                const value = team.reviewData?.[activeReview._id]?.[col.name];
+                if (value && !isNaN(parseFloat(value))) {
+                  scores.push(parseFloat(value));
+                }
+              } else {
+                const members = team.members.split(',').map(m => m.trim());
+                members.forEach(member => {
+                  const value = team.reviewData?.[activeReview._id]?.[col.name]?.[member];
+                  if (value && !isNaN(parseFloat(value))) {
+                    scores.push(parseFloat(value));
+                  }
+                });
+              }
+            });
+            
+            if (scores.length > 0) {
+              const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2);
+              const max = Math.max(...scores);
+              const min = Math.min(...scores);
+              worksheetData.push([col.name, col.type, avg, max, min]);
+            } else {
+              worksheetData.push([col.name, col.type, 'No data', 'No data', 'No data']);
+            }
+          } else {
+            worksheetData.push([col.name, col.type, 'Non-numeric', 'Non-numeric', 'Non-numeric']);
+          }
+        });
+      }
     } else {
-      const headers = ['Team/Member', 'Roll No', 'Project Title', 'Guide'];
+      const headers = ['Batch Name', 'Roll No', 'Member Name', 'Project Title', 'Guide'];
       columns.forEach(col => {
         headers.push(col.name);
       });
@@ -57,9 +144,14 @@ const generateReport = async (req, res) => {
       filteredTeams.forEach(team => {
         const members = team.members.split(',').map(m => m.trim());
         
-        const submittedBy = activeReview && team.reviewData?.[activeReview._id]?._submittedBy || 'Not submitted';
+        const submittedByUsername = activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
+        let submittedBy = 'Not submitted';
+        if (submittedByUsername) {
+          const reviewer = users.find(u => u.username === submittedByUsername);
+          submittedBy = reviewer ? reviewer.name || submittedByUsername : submittedByUsername;
+        }
         
-        const teamRow = [team.name, '', team.projectTitle || '', team.guide || ''];
+        const teamRow = [team.name, '', '', team.projectTitle || '', team.guide || ''];
         columns.forEach(col => {
           if (col.type === 'team') {
             let value = activeReview && team.reviewData?.[activeReview._id]?.[col.name] || team[col.name] || '';
@@ -79,7 +171,7 @@ const generateReport = async (req, res) => {
           const rollNo = rollMatch ? rollMatch[1] : '';
           const memberName = rollMatch ? member.replace(/\s*\([^)]+\)$/, '').trim() : member;
           
-          const memberRow = [`  ${memberName}`, rollNo, '', ''];
+          const memberRow = [team.name, rollNo, memberName, '', ''];
           const isAbsent = activeReview && team.reviewData?.[activeReview._id]?._absentMembers?.[member];
           let total = 0;
           
