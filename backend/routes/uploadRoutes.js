@@ -16,6 +16,7 @@ const {
   deleteTemplate,
   downloadTemplate
 } = require("../controllers/uploadController");
+const { fixCloudinaryAccess } = require("../utils/fixCloudinaryAccess");
 
 // Upload Requirements
 router.get("/upload-requirements", getAllUploadRequirements);
@@ -35,5 +36,8 @@ router.post("/templates", tempStorage.single('file'), uploadTemplate);
 router.put("/templates/:id", tempStorage.single('file'), updateTemplate);
 router.delete("/templates/:id", deleteTemplate);
 router.get("/templates/:id/download", downloadTemplate);
+
+// Fix Cloudinary access for existing files
+router.post("/fix-cloudinary-access", fixCloudinaryAccess);
 
 module.exports = router;

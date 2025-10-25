@@ -84,15 +84,19 @@ const uploadFile = async (req, res) => {
       return res.status(403).json({ error: 'File upload is locked. Contact head to unlock.' });
     }
     
-    const fileExt = path.extname(req.file.originalname);
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
     const cleanBatchName = batchName.replace(/\s+/g, '_');
     const cleanFileName = req.file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._]/g, '_');
     const fileNameWithoutExt = cleanFileName.substring(0, cleanFileName.lastIndexOf('.')) || cleanFileName;
     
+    // Use 'raw' resource type for PDFs and documents
+    const resourceType = ['.pdf', '.doc', '.docx', '.txt'].includes(fileExt) ? 'raw' : 'auto';
+    
     const result = await cloudinary.uploader.upload(req.file.path, {
       folder: `team_uploads/${cleanBatchName}`,
-      public_id: `${cleanBatchName}_${fileNameWithoutExt}${fileExt}`,
-      resource_type: "auto"
+      public_id: `${cleanBatchName}_${fileNameWithoutExt}`,
+      resource_type: resourceType,
+      access_mode: "public"
     });
     
     fs.unlinkSync(req.file.path);
@@ -189,13 +193,17 @@ const uploadTemplate = async (req, res) => {
       return res.status(400).json({ error: 'Title and file are required' });
     }
     
-    const fileExt = path.extname(req.file.originalname);
+    const fileExt = path.extname(req.file.originalname).toLowerCase();
     const cleanTitle = title.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    
+    // Use 'raw' resource type for PDFs and documents
+    const resourceType = ['.pdf', '.doc', '.docx', '.txt'].includes(fileExt) ? 'raw' : 'auto';
     
     const result = await cloudinary.uploader.upload(req.file.path, {
       folder: 'templates',
-      public_id: cleanTitle + fileExt,
-      resource_type: "auto"
+      public_id: cleanTitle,
+      resource_type: resourceType,
+      access_mode: "public"
     });
     
     fs.unlinkSync(req.file.path);
@@ -240,13 +248,17 @@ const updateTemplate = async (req, res) => {
         }
       }
       
-      const fileExt = path.extname(req.file.originalname);
+      const fileExt = path.extname(req.file.originalname).toLowerCase();
       const cleanTitle = (title || template.title).replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      
+      // Use 'raw' resource type for PDFs and documents
+      const resourceType = ['.pdf', '.doc', '.docx', '.txt'].includes(fileExt) ? 'raw' : 'auto';
       
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: 'templates',
-        public_id: cleanTitle + fileExt,
-        resource_type: "auto"
+        public_id: cleanTitle,
+        resource_type: resourceType,
+        access_mode: "public"
       });
       
       fs.unlinkSync(req.file.path);

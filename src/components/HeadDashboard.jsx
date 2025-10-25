@@ -2072,6 +2072,54 @@ function HeadDashboard({
               </div>
             </div>
 
+            <div className="bg-red-50 p-6 rounded-lg mb-6 border-l-4 border-red-500">
+              <h4 className="text-lg font-semibold text-gray-700 mb-4">
+                Fix File Access Issues
+              </h4>
+              <p className="text-sm text-gray-600 mb-4">
+                If students are unable to download files due to "Blocked for delivery" errors, click below to fix access permissions for all existing files.
+              </p>
+              <button
+                onClick={async () => {
+                  if (window.confirm("Fix access permissions for all existing files? This may take a few minutes.")) {
+                    setLoading("fixAccess", true);
+                    try {
+                      const response = await fetch("/api/fix-cloudinary-access", {
+                        method: "POST"
+                      });
+                      if (response.ok) {
+                        const result = await response.json();
+                        showToast(`Fixed access for ${result.totalFixed} files successfully!`);
+                      } else {
+                        showToast("Error fixing file access", "error");
+                      }
+                    } catch (error) {
+                      showToast("Error fixing file access", "error");
+                    } finally {
+                      setLoading("fixAccess", false);
+                    }
+                  }
+                }}
+                disabled={isLoading("fixAccess")}
+                className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  isLoading("fixAccess")
+                    ? "bg-gray-400 text-white cursor-not-allowed"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }`}
+              >
+                {isLoading("fixAccess") ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Fixing Access...
+                  </>
+                ) : (
+                  <>
+                    🔧 Fix File Access Permissions
+                  </>
+                )}
+              </button>
+            </div>
+
             <div className="bg-gray-50 p-6 rounded-lg">
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
                 Current Requirements & Submissions
@@ -2675,6 +2723,142 @@ function HeadDashboard({
           </div>
         );
 
+      case "file-manager":
+        return (
+          <div className="bg-white p-8 rounded-xl shadow-lg">
+            <h3 className="text-2xl font-bold text-gray-800 mb-6">
+              File Manager
+            </h3>
+
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {/* Group submissions by team */}
+                {teams
+                  .sort((a, b) => {
+                    const aName = a.name.replace(/Batch\s+/i, "");
+                    const bName = b.name.replace(/Batch\s+/i, "");
+                    return aName.localeCompare(bName, undefined, {
+                      numeric: true,
+                      sensitivity: "base",
+                    });
+                  })
+                  .map((team) => {
+                    const teamSubmissions = submissions.filter(
+                      (sub) => sub.batchName === team.name
+                    );
+                    
+                    return (
+                      <div
+                        key={team._id}
+                        className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center mb-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                            <span className="text-blue-600 font-bold text-sm">
+                              📁
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-800 text-sm">
+                              {team.name}
+                            </h4>
+                            <p className="text-xs text-gray-500">
+                              {teamSubmissions.length} files
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                          {teamSubmissions.length > 0 ? (
+                            teamSubmissions.map((submission) => {
+                              const fileExt = submission.originalName
+                                ?.split('.')
+                                .pop()
+                                ?.toLowerCase();
+                              const fileIcon = 
+                                fileExt === 'pdf' ? '📄' :
+                                ['jpg', 'jpeg', 'png', 'gif'].includes(fileExt) ? '🖼️' :
+                                ['ppt', 'pptx'].includes(fileExt) ? '📊' :
+                                ['doc', 'docx'].includes(fileExt) ? '📝' : '📎';
+                              
+                              return (
+                                <div
+                                  key={submission._id}
+                                  className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
+                                >
+                                  <div className="flex items-center flex-1 min-w-0">
+                                    <span className="mr-2 text-sm">{fileIcon}</span>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium text-gray-700 truncate">
+                                        {submission.requirementId?.title || 'Unknown'}
+                                      </p>
+                                      <p className="text-xs text-gray-500 truncate">
+                                        {submission.originalName}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-1 ml-2">
+                                    <a
+                                      href={submission.filePath}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                                      title="Download"
+                                    >
+                                      <FaDownload className="w-3 h-3" />
+                                    </a>
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(submission.filePath);
+                                        showToast('Link copied to clipboard!');
+                                      }}
+                                      className="p-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                      title="Copy Link"
+                                    >
+                                      📋
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <p className="text-xs text-gray-400 text-center py-4">
+                              No files uploaded
+                            </p>
+                          )}
+                        </div>
+                        
+                        {teamSubmissions.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs text-gray-500">
+                              Last upload: {new Date(
+                                Math.max(
+                                  ...teamSubmissions.map(s => new Date(s.uploadedAt))
+                                )
+                              ).toLocaleDateString()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+              
+              {teams.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">📁</div>
+                  <h4 className="text-lg font-semibold text-gray-600 mb-2">
+                    No Teams Found
+                  </h4>
+                  <p className="text-gray-500">
+                    Create teams first to see their file uploads here.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -2783,6 +2967,16 @@ function HeadDashboard({
             onClick={() => setActiveTab("reports")}
           >
             <FaChartBar /> Reports
+          </button>
+          <button
+            className={`w-full px-6 py-3 text-left flex items-center gap-3 transition-colors ${
+              activeTab === "file-manager"
+                ? "bg-gray-700 text-white border-r-3 border-blue-500"
+                : "text-gray-300 hover:bg-gray-700 hover:text-white"
+            }`}
+            onClick={() => setActiveTab("file-manager")}
+          >
+            <FaFileAlt /> File Manager
           </button>
         </nav>
 
