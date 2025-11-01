@@ -68,6 +68,24 @@ const updateUser = async (req, res) => {
   }
 };
 
+const updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!['head', 'reviewer', 'viewer'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    
+    const user = await User.findByIdAndUpdate(
+      req.params.id, 
+      { role }, 
+      { new: true }
+    );
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const deleteUser = async (req, res) => {
   try {
     await User.findByIdAndDelete(req.params.id);
@@ -102,6 +120,7 @@ module.exports = {
   getUserByUsername,
   createUser,
   updateUser,
+  updateUserRole,
   deleteUser,
   initializeDefaultUser,
 };

@@ -19,6 +19,7 @@ function TeamsTable({
   onDataChange,
   currentUser,
 }) {
+  const isViewer = currentUser?.role === 'viewer';
   const [expandedTeam, setExpandedTeam] = useState(null);
   const [pendingChanges, setPendingChanges] = useState({});
   const [submittingTeam, setSubmittingTeam] = useState(null);
@@ -328,7 +329,7 @@ function TeamsTable({
     <div className="bg-white overflow-hidden">
       <div className="px-4 py-4 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-between">
         <h3 className="text-xl font-bold text-white">
-          {isHead ? "Teams Overview" : "Teams for Review"}
+          {isHead ? "Teams Overview" : isViewer ? "Teams View" : "Teams for Review"}
         </h3>
         {isHead && (
           <select
@@ -427,7 +428,11 @@ function TeamsTable({
                         }
                       >
                         {col.type === "team" ? (
-                          isHead ? (
+                          isViewer ? (
+                            <span className="text-gray-700">
+                              {getDisplayValue(team, col) || "-"}
+                            </span>
+                          ) : isHead ? (
                             col.inputType === "options" ? (
                               <select
                                 value={
@@ -602,7 +607,13 @@ function TeamsTable({
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className="text-gray-400">-</span>
                     </td>
-                    {isHead ? (
+                    {isViewer ? (
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                          View Only
+                        </span>
+                      </td>
+                    ) : isHead ? (
                       <td className="px-4 py-4 whitespace-nowrap">
                         {activeReview &&
                         team.reviewData?.[activeReview._id]?._scoringLocked ? (
@@ -714,20 +725,31 @@ function TeamsTable({
                                 ? member.match(/\(([^)]+)\)/)[1]
                                 : member}
                             </span>
-                            <label className="ml-3 flex items-center text-xs">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  absentMembers[team._id]?.[member] !==
-                                  undefined
-                                    ? absentMembers[team._id][member]
-                                    : isAbsentFromSavedData(team._id, member)
-                                }
-                                onChange={() => toggleAbsent(team._id, member)}
-                                className="mr-1"
-                              />
-                              Absent
-                            </label>
+                            {!isViewer && (
+                              <label className="ml-3 flex items-center text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    absentMembers[team._id]?.[member] !==
+                                    undefined
+                                      ? absentMembers[team._id][member]
+                                      : isAbsentFromSavedData(team._id, member)
+                                  }
+                                  onChange={() => toggleAbsent(team._id, member)}
+                                  className="mr-1"
+                                />
+                                Absent
+                              </label>
+                            )}
+                            {isViewer && (
+                              absentMembers[team._id]?.[member] !== undefined
+                                ? absentMembers[team._id][member]
+                                : isAbsentFromSavedData(team._id, member)
+                            ) && (
+                              <span className="ml-3 text-xs text-red-600 font-medium">
+                                (Absent)
+                              </span>
+                            )}
                           </div>
                         </td>
                         {customColumns.map((col) => {
@@ -749,7 +771,22 @@ function TeamsTable({
                               }`}
                             >
                               {col.type === "individual" ? (
-                                isHead ? (
+                                isViewer ? (
+                                  (
+                                    absentMembers[team._id]?.[member] !==
+                                    undefined
+                                      ? absentMembers[team._id][member]
+                                      : isAbsentFromSavedData(team._id, member)
+                                  ) ? (
+                                    <span className="text-gray-500 italic">
+                                      Absent
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-700">
+                                      {getDisplayValue(team, col, member) || "-"}
+                                    </span>
+                                  )
+                                ) : isHead ? (
                                   (
                                     absentMembers[team._id]?.[member] !==
                                     undefined

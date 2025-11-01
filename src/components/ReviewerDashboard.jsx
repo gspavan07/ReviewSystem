@@ -12,22 +12,24 @@ function ReviewerDashboard({
 }) {
 
   console.log('Rendering ReviewerDashboard with currentUser:', currentUser);
-  const filteredTeams = teams.filter((team) => {
-    if (!currentUser.assignedSections || currentUser.assignedSections.length === 0) {
-      return false;
-    }
-    
-    // Check if assigned to specific batch name or section letter
-    const sectionLetter = team.name
-      .replace("Batch ", "")
-      .charAt(0)
-      .toUpperCase();
-    
-    return (
-      currentUser.assignedSections.includes(team.name) ||
-      currentUser.assignedSections.includes(sectionLetter)
-    );
-  });
+  const filteredTeams = currentUser.role === 'viewer' 
+    ? teams // Viewers can see all teams
+    : teams.filter((team) => {
+        if (!currentUser.assignedSections || currentUser.assignedSections.length === 0) {
+          return false;
+        }
+        
+        // Check if assigned to specific batch name or section letter
+        const sectionLetter = team.name
+          .replace("Batch ", "")
+          .charAt(0)
+          .toUpperCase();
+        
+        return (
+          currentUser.assignedSections.includes(team.name) ||
+          currentUser.assignedSections.includes(sectionLetter)
+        );
+      });
 
   console.log('Current user assignments:', currentUser?.assignedSections);
   console.log('Available teams:', teams.map(t => t.name));
@@ -42,9 +44,11 @@ function ReviewerDashboard({
             <div className="flex items-center">
               <img src="/au_logo.svg" alt="AU Logo" className="h-8 w-8 mr-3" />
               <div>
-                <h1 className="text-xl font-bold text-gray-800">Reviewer Portal</h1>
+                <h1 className="text-xl font-bold text-gray-800">
+                  {currentUser.role === 'viewer' ? 'Viewer Portal' : 'Reviewer Portal'}
+                </h1>
                 <p className="text-sm text-gray-600">
-                  {currentUser.name} • Sections: {currentUser.assignedSections?.join(", ") || "None"}
+                  {currentUser.name} • {currentUser.role === 'viewer' ? 'View Only Access' : `Sections: ${currentUser.assignedSections?.join(", ") || "None"}`}
                 </p>
               </div>
             </div>

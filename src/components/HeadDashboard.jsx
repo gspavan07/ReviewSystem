@@ -41,6 +41,7 @@ function HeadDashboard({
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
+  const [newUserRole, setNewUserRole] = useState("reviewer");
   const [assignedSections, setAssignedSections] = useState("");
 
   const [filterSection, setFilterSection] = useState("All");
@@ -928,8 +929,8 @@ function HeadDashboard({
           username: newUsername,
           password: newPassword,
           name: newName,
-          role: "reviewer",
-          assignedSections: assignedSections
+          role: newUserRole,
+          assignedSections: (newUserRole === "viewer" || newUserRole === "head") ? [] : assignedSections
             .split(",")
             .map((s) => s.trim())
             .filter((s) => s),
@@ -941,6 +942,7 @@ function HeadDashboard({
         setNewUsername("");
         setNewPassword("");
         setNewName("");
+        setNewUserRole("reviewer");
         setAssignedSections("");
         showToast("User added successfully!");
       } else {
@@ -1030,6 +1032,25 @@ function HeadDashboard({
       }
     } catch (error) {
       showToast("Error updating assignments", "error");
+    }
+  };
+
+  const updateUserRole = async (userId, newRole) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/role`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (response.ok) {
+        await loadUsers();
+        showToast("User role updated successfully!");
+      } else {
+        showToast("Error updating user role", "error");
+      }
+    } catch (error) {
+      showToast("Error updating user role", "error");
     }
   };
 
@@ -1803,9 +1824,9 @@ function HeadDashboard({
 
             <div className="bg-gray-50 p-6 rounded-lg mb-6">
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
-                Add New Reviewer
+                Add New User
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
                 <input
                   type="text"
                   value={newName}
@@ -1827,12 +1848,22 @@ function HeadDashboard({
                   placeholder="Password"
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+                <select
+                  value={newUserRole || "reviewer"}
+                  onChange={(e) => setNewUserRole(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="reviewer">Reviewer</option>
+                  <option value="viewer">Viewer</option>
+                  <option value="head">Head</option>
+                </select>
                 <input
                   type="text"
                   value={assignedSections}
                   onChange={(e) => setAssignedSections(e.target.value)}
                   placeholder="Assigned Sections (A,B,C)"
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={newUserRole === "viewer" || newUserRole === "head"}
                 />
               </div>
               <button
@@ -1851,7 +1882,7 @@ function HeadDashboard({
                   </>
                 ) : (
                   <>
-                    <FaPlus /> Add Reviewer
+                    <FaPlus /> Add User
                   </>
                 )}
               </button>
@@ -1881,21 +1912,32 @@ function HeadDashboard({
               </div>
               <div className="space-y-3">
                 {users
-                  .filter((u) => u.role === "reviewer")
+                  .filter((u) => u.role !== "student")
                   .map((user) => (
                     <div
                       key={user._id}
                       className="p-4 bg-white rounded-lg border border-gray-200"
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <span className="text-gray-700 font-medium">
-                            {user.name || user.username}
-                          </span>
-                          <span className="ml-2 text-sm text-gray-500">
-                            ({user.username})
-                          </span>
-                          <div className="text-sm text-gray-600 mt-1">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-gray-700 font-medium">
+                              {user.name || user.username}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              ({user.username})
+                            </span>
+                            <select
+                              value={user.role || "reviewer"}
+                              onChange={(e) => updateUserRole(user._id, e.target.value)}
+                              className="ml-2 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value="reviewer">Reviewer</option>
+                              <option value="viewer">Viewer</option>
+                              <option value="head">Head</option>
+                            </select>
+                          </div>
+                          <div className="text-sm text-gray-600">
                             Sections:{" "}
                             {user.assignedSections?.join(", ") || "None"}
                           </div>
@@ -1907,7 +1949,7 @@ function HeadDashboard({
                           <FaTrash /> Delete
                         </button>
                       </div>
-                      {user.role === "reviewer" && (
+                      {(user.role === "reviewer" || !user.role) && (
                         <div className="mt-3 pt-3 border-t">
                           {editingUser?._id === user._id ? (
                             <div>
@@ -2005,6 +2047,20 @@ function HeadDashboard({
                               Edit Assignments
                             </button>
                           )}
+                        </div>
+                      )}
+                      {user.role === "viewer" && (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-sm text-gray-500 italic">
+                            Viewers can only see data, no assignments needed.
+                          </p>
+                        </div>
+                      )}
+                      {user.role === "head" && (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-sm text-gray-500 italic">
+                            Heads have full access to all data and features.
+                          </p>
                         </div>
                       )}
                     </div>
