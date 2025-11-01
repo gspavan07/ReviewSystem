@@ -87,6 +87,7 @@ function HeadDashboard({
   const [isImporting, setIsImporting] = useState(false);
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [selectedDashboardSection, setSelectedDashboardSection] = useState("");
+  const [selectedSubmissionSection, setSelectedSubmissionSection] = useState("");
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -1389,45 +1390,84 @@ function HeadDashboard({
                 )}
               </div>
 
-              {/* Review Progress Chart */}
+              {/* Submissions Status Pie Chart */}
               <div className="bg-gray-50 p-6 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-700 mb-4">Review Progress</h4>
-                {activeReview ? (
-                  <div className="space-y-4">
-                    {(() => {
-                      const submittedTeams = teams.filter(team => 
-                        team.reviewData?.[activeReview._id]?._submittedBy
-                      ).length;
-                      const pendingTeams = teams.length - submittedTeams;
-                      const submittedPercentage = teams.length > 0 ? (submittedTeams / teams.length) * 100 : 0;
-                      
-                      return (
-                        <>
-                          <div className="text-center mb-4">
-                            <div className="text-3xl font-bold text-gray-800">{submittedPercentage.toFixed(1)}%</div>
-                            <div className="text-sm text-gray-600">Completed</div>
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-semibold text-gray-700">Submissions Status</h4>
+                  <select
+                    value={selectedSubmissionSection || getTeamSections()[0] || ""}
+                    onChange={(e) => setSelectedSubmissionSection(e.target.value)}
+                    className="px-3 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {getTeamSections().map(section => (
+                      <option key={section} value={section}>Section {section}</option>
+                    ))}
+                  </select>
+                </div>
+                {uploadRequirements.length > 0 ? (() => {
+                  const currentSection = selectedSubmissionSection || getTeamSections()[0];
+                  const filteredTeams = teams.filter(team => 
+                    team.name.replace('Batch ', '').charAt(0).toUpperCase() === currentSection
+                  );
+                  
+                  const teamsWithSubmissions = filteredTeams.filter(team => 
+                    submissions.some(sub => sub.batchName === team.name)
+                  ).length;
+                  const teamsWithoutSubmissions = filteredTeams.length - teamsWithSubmissions;
+                  const submittedPercentage = filteredTeams.length > 0 ? (teamsWithSubmissions / filteredTeams.length) * 100 : 0;
+                  const pendingPercentage = 100 - submittedPercentage;
+                  
+                  return (
+                    <div className="flex items-center justify-center">
+                      <div className="relative w-40 h-40">
+                        <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 42 42">
+                          <circle
+                            cx="21"
+                            cy="21"
+                            r="15.915"
+                            fill="transparent"
+                            stroke="#f59e0b"
+                            strokeWidth="3"
+                            strokeDasharray={`${pendingPercentage} ${100 - pendingPercentage}`}
+                            strokeDashoffset="25"
+                          />
+                          <circle
+                            cx="21"
+                            cy="21"
+                            r="15.915"
+                            fill="transparent"
+                            stroke="#3b82f6"
+                            strokeWidth="3"
+                            strokeDasharray={`${submittedPercentage} ${100 - submittedPercentage}`}
+                            strokeDashoffset={`${25 - pendingPercentage}`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-800">{submittedPercentage.toFixed(1)}%</div>
+                            <div className="text-xs text-gray-600">Submitted</div>
                           </div>
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-green-600">Submitted: {submittedTeams}</span>
-                              <span className="text-red-600">Pending: {pendingTeams}</span>
-                            </div>
-                            <div className="bg-gray-200 rounded-full h-4">
-                              <div 
-                                className="bg-green-500 h-4 rounded-full transition-all duration-300"
-                                style={{ width: `${submittedPercentage}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()
-                    }
-                  </div>
-                ) : (
+                        </div>
+                      </div>
+                      <div className="ml-6 space-y-2">
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 bg-blue-500 rounded mr-2"></div>
+                          <span className="text-sm text-gray-700">Submitted: {teamsWithSubmissions}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 bg-yellow-500 rounded mr-2"></div>
+                          <span className="text-sm text-gray-700">Pending: {teamsWithoutSubmissions}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                          Total: {filteredTeams.length} teams
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })() : (
                   <div className="text-center text-gray-500 py-8">
                     <FaInfoCircle className="text-4xl mb-2 mx-auto" />
-                    <p>No active review</p>
+                    <p>No upload requirements</p>
                   </div>
                 )}
               </div>
