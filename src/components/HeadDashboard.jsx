@@ -51,7 +51,7 @@ function HeadDashboard({
     useState("");
   const [newRequirementDueDate, setNewRequirementDueDate] = useState("");
   const [selectedSections, setSelectedSections] = useState([]);
-  const [selectedFormats, setSelectedFormats] = useState(['.pdf']);
+  const [selectedFormats, setSelectedFormats] = useState([".pdf"]);
   const [submissions, setSubmissions] = useState([]);
   const [userFilter, setUserFilter] = useState("all");
   const [editingUser, setEditingUser] = useState(null);
@@ -61,6 +61,7 @@ function HeadDashboard({
   const [activeReview, setActiveReview] = useState(null);
   const [newReviewName, setNewReviewName] = useState("");
   const [newReviewDescription, setNewReviewDescription] = useState("");
+  const [newReviewDate, setNewReviewDate] = useState("");
   const [editingRequirement, setEditingRequirement] = useState(null);
   const [editDeadline, setEditDeadline] = useState("");
   const [editingColumn, setEditingColumn] = useState(null);
@@ -131,6 +132,7 @@ function HeadDashboard({
         body: JSON.stringify({
           name: newReviewName,
           description: newReviewDescription,
+          reviewDate: newReviewDate ? new Date(newReviewDate) : null,
         }),
       });
 
@@ -140,6 +142,7 @@ function HeadDashboard({
         await onDataChange(); // Reload columns for new active review
         setNewReviewName("");
         setNewReviewDescription("");
+        setNewReviewDate("");
         showToast("Review created successfully!");
       } else {
         showToast("Error creating review", "error");
@@ -328,19 +331,23 @@ function HeadDashboard({
       filteredTeams.forEach((team) => {
         data.rows.push([team.name, "", "", ""]); // Team header row
         const members = team.members.split(",").map((m) => m.trim());
-        const isTeamSubmitted = activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
-        
+        const isTeamSubmitted =
+          activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
+
         members.forEach((member) => {
           const rollMatch = member.match(/\(([^)]+)\)$/);
           const rollNo = rollMatch ? rollMatch[1] : "";
-          const memberName = rollMatch ? member.replace(/\s*\([^)]+\)$/, "").trim() : member;
-          
+          const memberName = rollMatch
+            ? member.replace(/\s*\([^)]+\)$/, "").trim()
+            : member;
+
           let status = "";
           if (isTeamSubmitted) {
-            const isAbsent = team.reviewData?.[activeReview._id]?._absentMembers?.[member];
+            const isAbsent =
+              team.reviewData?.[activeReview._id]?._absentMembers?.[member];
             status = isAbsent ? "Absent" : "Present";
           }
-          
+
           data.rows.push(["", rollNo, memberName, status]);
         });
       });
@@ -351,66 +358,80 @@ function HeadDashboard({
     } else if (type === "review" && activeReview) {
       // Analytics for review report
       data.headers = ["Review Analytics", "Value"];
-      
+
       let submittedCount = 0;
       let totalStudents = 0;
       let absentCount = 0;
-      
-      filteredTeams.forEach(team => {
-        const members = team.members.split(",").map(m => m.trim());
+
+      filteredTeams.forEach((team) => {
+        const members = team.members.split(",").map((m) => m.trim());
         totalStudents += members.length;
-        
+
         if (team.reviewData?.[activeReview._id]?._submittedBy) {
           submittedCount++;
         }
-        
-        members.forEach(member => {
+
+        members.forEach((member) => {
           if (team.reviewData?.[activeReview._id]?._absentMembers?.[member]) {
             absentCount++;
           }
         });
       });
-      
+
       data.rows.push(["Review Name", activeReview.name]);
       data.rows.push(["Description", activeReview.description || "N/A"]);
+      if (activeReview.reviewDate) {
+        data.rows.push([
+          "Review Date",
+          new Date(activeReview.reviewDate).toLocaleDateString(),
+        ]);
+      }
       data.rows.push(["Total Teams", filteredTeams.length]);
       data.rows.push(["Teams with Scoring Submitted", submittedCount]);
-      data.rows.push(["Teams with Scoring Pending", filteredTeams.length - submittedCount]);
+      data.rows.push([
+        "Teams with Scoring Pending",
+        filteredTeams.length - submittedCount,
+      ]);
       data.rows.push(["Total Students", totalStudents]);
-      data.rows.push(["Students Present", totalStudents - absentCount]);
       data.rows.push(["Students Absent", absentCount]);
-      
+
       // Column analytics
       if (customColumns.length > 0) {
         data.rows.push(["", ""]);
         data.rows.push(["Column Analytics", ""]);
-        
-        customColumns.forEach(col => {
+
+        customColumns.forEach((col) => {
           if (col.inputType === "number") {
             let scores = [];
-            
-            filteredTeams.forEach(team => {
+
+            filteredTeams.forEach((team) => {
               if (col.type === "team") {
                 const value = team.reviewData?.[activeReview._id]?.[col.name];
                 if (value && !isNaN(parseFloat(value))) {
                   scores.push(parseFloat(value));
                 }
               } else {
-                const members = team.members.split(",").map(m => m.trim());
-                members.forEach(member => {
-                  const value = team.reviewData?.[activeReview._id]?.[col.name]?.[member];
+                const members = team.members.split(",").map((m) => m.trim());
+                members.forEach((member) => {
+                  const value =
+                    team.reviewData?.[activeReview._id]?.[col.name]?.[member];
                   if (value && !isNaN(parseFloat(value))) {
                     scores.push(parseFloat(value));
                   }
                 });
               }
             });
-            
+
             if (scores.length > 0) {
-              const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2);
+              const avg = (
+                scores.reduce((a, b) => a + b, 0) / scores.length
+              ).toFixed(2);
               const max = Math.max(...scores);
               const min = Math.min(...scores);
-              data.rows.push([`${col.name} (Avg/Max/Min)`, `${avg}/${max}/${min}`]);
+              data.rows.push([
+                `${col.name} (Avg/Max/Min)`,
+                `${avg}/${col.maxMarks}/${min}`,
+              ]);
             } else {
               data.rows.push([`${col.name}`, "No data"]);
             }
@@ -419,7 +440,13 @@ function HeadDashboard({
       }
     } else {
       // Score reports with hierarchical format
-      data.headers = ["Batch Name", "Roll No", "Member Name", "Project Title", "Guide"];
+      data.headers = [
+        "Batch Name",
+        "Roll No",
+        "Member Name",
+        "Project Title",
+        "Guide",
+      ];
       customColumns.forEach((col) => {
         data.headers.push(col.name);
       });
@@ -429,11 +456,16 @@ function HeadDashboard({
         const members = team.members.split(",").map((m) => m.trim());
 
         // Team header row
-        const submittedByUsername = activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
-        let submittedBy = 'Not submitted';
+        const submittedByUsername =
+          activeReview && team.reviewData?.[activeReview._id]?._submittedBy;
+        let submittedBy = "Not submitted";
         if (submittedByUsername) {
-          const reviewer = users.find(u => u.username === submittedByUsername);
-          submittedBy = reviewer ? reviewer.name || submittedByUsername : submittedByUsername;
+          const reviewer = users.find(
+            (u) => u.username === submittedByUsername
+          );
+          submittedBy = reviewer
+            ? reviewer.name || submittedByUsername
+            : submittedByUsername;
         }
 
         const teamRow = [
@@ -547,7 +579,9 @@ function HeadDashboard({
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        const reviewPrefix = activeReview ? `${activeReview.name.replace(/\s+/g, '_')}_` : '';
+        const reviewPrefix = activeReview
+          ? `${activeReview.name.replace(/\s+/g, "_")}_`
+          : "";
         a.download = `${reviewPrefix}${type}_report_${
           new Date().toISOString().split("T")[0]
         }.xlsx`;
@@ -947,7 +981,7 @@ function HeadDashboard({
         setNewRequirementDescription("");
         setNewRequirementDueDate("");
         setSelectedSections([]);
-        setSelectedFormats(['.pdf']);
+        setSelectedFormats([".pdf"]);
         showToast("Upload requirement added successfully!");
       } else {
         showToast("Error adding upload requirement", "error");
@@ -1486,15 +1520,16 @@ function HeadDashboard({
 
       case "teams-overview":
         return (
-          <div className="bg-white p-8 rounded-xl shadow-lg">
-            <TeamsTable
-              teams={filteredTeams}
-              customColumns={customColumns}
-              isHead={true}
-              onDataChange={onDataChange}
-              currentUser={currentUser}
-            />
-          </div>
+          <TeamsTable
+            getTeamSections={getTeamSections}
+            filterSection={filterSection}
+            setFilterSection={setFilterSection}
+            teams={filteredTeams}
+            customColumns={customColumns}
+            isHead={true}
+            onDataChange={onDataChange}
+            currentUser={currentUser}
+          />
         );
 
       case "columns":
@@ -2057,7 +2092,18 @@ function HeadDashboard({
                     Allowed File Formats:
                   </label>
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.txt', '.zip'].map((format) => (
+                    {[
+                      ".pdf",
+                      ".doc",
+                      ".docx",
+                      ".ppt",
+                      ".pptx",
+                      ".jpg",
+                      ".jpeg",
+                      ".png",
+                      ".txt",
+                      ".zip",
+                    ].map((format) => (
                       <label key={format} className="flex items-center">
                         <input
                           type="checkbox"
@@ -2066,7 +2112,9 @@ function HeadDashboard({
                             if (e.target.checked) {
                               setSelectedFormats([...selectedFormats, format]);
                             } else {
-                              setSelectedFormats(selectedFormats.filter(f => f !== format));
+                              setSelectedFormats(
+                                selectedFormats.filter((f) => f !== format)
+                              );
                             }
                           }}
                           className="mr-2"
@@ -2099,24 +2147,35 @@ function HeadDashboard({
               </div>
             </div>
 
-            <div className="bg-red-50 p-6 rounded-lg mb-6 border-l-4 border-red-500">
+            {/* <div className="bg-red-50 p-6 rounded-lg mb-6 border-l-4 border-red-500">
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
                 Fix File Access Issues
               </h4>
               <p className="text-sm text-gray-600 mb-4">
-                If students are unable to download files due to "Blocked for delivery" errors, click below to fix access permissions for all existing files.
+                If students are unable to download files due to "Blocked for
+                delivery" errors, click below to fix access permissions for all
+                existing files.
               </p>
               <button
                 onClick={async () => {
-                  if (window.confirm("Fix access permissions for all existing files? This may take a few minutes.")) {
+                  if (
+                    window.confirm(
+                      "Fix access permissions for all existing files? This may take a few minutes."
+                    )
+                  ) {
                     setLoading("fixAccess", true);
                     try {
-                      const response = await fetch("/api/fix-cloudinary-access", {
-                        method: "POST"
-                      });
+                      const response = await fetch(
+                        "/api/fix-cloudinary-access",
+                        {
+                          method: "POST",
+                        }
+                      );
                       if (response.ok) {
                         const result = await response.json();
-                        showToast(`Fixed access for ${result.totalFixed} files successfully!`);
+                        showToast(
+                          `Fixed access for ${result.totalFixed} files successfully!`
+                        );
                       } else {
                         showToast("Error fixing file access", "error");
                       }
@@ -2140,12 +2199,10 @@ function HeadDashboard({
                     Fixing Access...
                   </>
                 ) : (
-                  <>
-                    🔧 Fix File Access Permissions
-                  </>
+                  <>🔧 Fix File Access Permissions</>
                 )}
               </button>
-            </div>
+            </div> */}
 
             <div className="bg-gray-50 p-6 rounded-lg">
               <h4 className="text-lg font-semibold text-gray-700 mb-4">
@@ -2180,11 +2237,12 @@ function HeadDashboard({
                               ? req.sections.join(", ")
                               : "All"}
                           </p>
-                          {req.allowedFormats && req.allowedFormats.length > 0 && (
-                            <p className="text-green-600 text-sm mt-1">
-                              Allowed formats: {req.allowedFormats.join(", ")}
-                            </p>
-                          )}
+                          {req.allowedFormats &&
+                            req.allowedFormats.length > 0 && (
+                              <p className="text-green-600 text-sm mt-1">
+                                Allowed formats: {req.allowedFormats.join(", ")}
+                              </p>
+                            )}
                           {req.dueDate && (
                             <p className="text-gray-500 text-xs mt-1">
                               Due: {new Date(req.dueDate).toLocaleDateString()}
@@ -2355,6 +2413,12 @@ function HeadDashboard({
                   placeholder="Review Description"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24"
                 />
+                <input
+                  type="date"
+                  value={newReviewDate}
+                  onChange={(e) => setNewReviewDate(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
                 <button
                   onClick={createReview}
                   disabled={isLoading("createReview")}
@@ -2405,6 +2469,12 @@ function HeadDashboard({
                         <p className="text-gray-600 text-sm mt-1">
                           {review.description}
                         </p>
+                        {review.reviewDate && (
+                          <p className="text-blue-600 text-sm mt-1">
+                            Review Date:{" "}
+                            {new Date(review.reviewDate).toLocaleDateString()}
+                          </p>
+                        )}
                         <p className="text-gray-500 text-xs mt-1">
                           Created:{" "}
                           {new Date(review.createdAt).toLocaleDateString()}
@@ -2778,7 +2848,7 @@ function HeadDashboard({
                     const teamSubmissions = submissions.filter(
                       (sub) => sub.batchName === team.name
                     );
-                    
+
                     return (
                       <div
                         key={team._id}
@@ -2799,30 +2869,40 @@ function HeadDashboard({
                             </p>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2 max-h-40 overflow-y-auto">
                           {teamSubmissions.length > 0 ? (
                             teamSubmissions.map((submission) => {
                               const fileExt = submission.originalName
-                                ?.split('.')
+                                ?.split(".")
                                 .pop()
                                 ?.toLowerCase();
-                              const fileIcon = 
-                                fileExt === 'pdf' ? '📄' :
-                                ['jpg', 'jpeg', 'png', 'gif'].includes(fileExt) ? '🖼️' :
-                                ['ppt', 'pptx'].includes(fileExt) ? '📊' :
-                                ['doc', 'docx'].includes(fileExt) ? '📝' : '📎';
-                              
+                              const fileIcon =
+                                fileExt === "pdf"
+                                  ? "📄"
+                                  : ["jpg", "jpeg", "png", "gif"].includes(
+                                      fileExt
+                                    )
+                                  ? "🖼️"
+                                  : ["ppt", "pptx"].includes(fileExt)
+                                  ? "📊"
+                                  : ["doc", "docx"].includes(fileExt)
+                                  ? "📝"
+                                  : "📎";
+
                               return (
                                 <div
                                   key={submission._id}
                                   className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
                                 >
                                   <div className="flex items-center flex-1 min-w-0">
-                                    <span className="mr-2 text-sm">{fileIcon}</span>
+                                    <span className="mr-2 text-sm">
+                                      {fileIcon}
+                                    </span>
                                     <div className="min-w-0 flex-1">
                                       <p className="text-xs font-medium text-gray-700 truncate">
-                                        {submission.requirementId?.title || 'Unknown'}
+                                        {submission.requirementId?.title ||
+                                          "Unknown"}
                                       </p>
                                       <p className="text-xs text-gray-500 truncate">
                                         {submission.originalName}
@@ -2841,8 +2921,10 @@ function HeadDashboard({
                                     </a>
                                     <button
                                       onClick={() => {
-                                        navigator.clipboard.writeText(submission.filePath);
-                                        showToast('Link copied to clipboard!');
+                                        navigator.clipboard.writeText(
+                                          submission.filePath
+                                        );
+                                        showToast("Link copied to clipboard!");
                                       }}
                                       className="p-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
                                       title="Copy Link"
@@ -2859,13 +2941,16 @@ function HeadDashboard({
                             </p>
                           )}
                         </div>
-                        
+
                         {teamSubmissions.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
                             <p className="text-xs text-gray-500">
-                              Last upload: {new Date(
+                              Last upload:{" "}
+                              {new Date(
                                 Math.max(
-                                  ...teamSubmissions.map(s => new Date(s.uploadedAt))
+                                  ...teamSubmissions.map(
+                                    (s) => new Date(s.uploadedAt)
+                                  )
                                 )
                               ).toLocaleDateString()}
                             </p>
@@ -2875,7 +2960,7 @@ function HeadDashboard({
                     );
                   })}
               </div>
-              
+
               {teams.length === 0 && (
                 <div className="text-center py-12">
                   <div className="text-6xl mb-4">📁</div>
@@ -3025,7 +3110,7 @@ function HeadDashboard({
         </div>
       </div>
 
-      <div className="flex-1 ml-64 p-8 overflow-y-auto">{renderContent()}</div>
+      <div className="flex-1 ml-64 overflow-y-auto">{renderContent()}</div>
 
       {/* Section Selection Dialog */}
       {showSectionDialog && (

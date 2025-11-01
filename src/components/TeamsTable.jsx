@@ -10,6 +10,9 @@ import {
 } from "react-icons/fa";
 
 function TeamsTable({
+  getTeamSections,
+  filterSection,
+  setFilterSection,
   teams,
   customColumns,
   isHead,
@@ -322,14 +325,28 @@ function TeamsTable({
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-      <div className="px-4 py-4 bg-gradient-to-r from-blue-600 to-purple-600">
+    <div className="bg-white overflow-hidden">
+      <div className="px-4 py-4 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-between">
         <h3 className="text-xl font-bold text-white">
           {isHead ? "Teams Overview" : "Teams for Review"}
         </h3>
+        {isHead && (
+          <select
+            value={filterSection}
+            onChange={(e) => setFilterSection(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="All">All Sections</option>
+            {getTeamSections().map((section) => (
+              <option key={section} value={section}>
+                {section}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
-      <div className="overflow-x-auto max-h-[700px] overflow-y-auto">
+      <div className="overflow-x-auto max-h-[93vh] overflow-y-auto">
         <table className="w-full">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
@@ -396,7 +413,11 @@ function TeamsTable({
                     {customColumns.map((col) => (
                       <td
                         key={col.name}
-                        className={`px-4 py-4 ${col.inputType === "textarea" ? "whitespace-normal break-words" : "whitespace-nowrap"}`}
+                        className={`px-4 py-4 ${
+                          col.inputType === "textarea"
+                            ? "whitespace-normal break-words"
+                            : "whitespace-nowrap"
+                        }`}
                         rowSpan={
                           col.type === "team" &&
                           col.inputType === "textarea" &&
@@ -589,9 +610,12 @@ function TeamsTable({
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
-                                const response = await fetch(`/api/teams/${team._id}/unlock-scoring`, {
-                                  method: "PUT",
-                                });
+                                const response = await fetch(
+                                  `/api/teams/${team._id}/unlock-scoring`,
+                                  {
+                                    method: "PUT",
+                                  }
+                                );
                                 if (response.ok) {
                                   await onDataChange();
                                 } else {
@@ -610,9 +634,12 @@ function TeamsTable({
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
-                                const response = await fetch(`/api/teams/${team._id}/lock-scoring`, {
-                                  method: "PUT",
-                                });
+                                const response = await fetch(
+                                  `/api/teams/${team._id}/lock-scoring`,
+                                  {
+                                    method: "PUT",
+                                  }
+                                );
                                 if (response.ok) {
                                   await onDataChange();
                                 } else {
@@ -696,9 +723,7 @@ function TeamsTable({
                                     ? absentMembers[team._id][member]
                                     : isAbsentFromSavedData(team._id, member)
                                 }
-                                onChange={() =>
-                                  toggleAbsent(team._id, member)
-                                }
+                                onChange={() => toggleAbsent(team._id, member)}
                                 className="mr-1"
                               />
                               Absent
@@ -717,7 +742,11 @@ function TeamsTable({
                           return (
                             <td
                               key={col.name}
-                              className={`px-4 py-3 ${col.inputType === "textarea" ? "whitespace-normal break-words" : "whitespace-nowrap"}`}
+                              className={`px-4 py-3 ${
+                                col.inputType === "textarea"
+                                  ? "whitespace-normal break-words"
+                                  : "whitespace-nowrap"
+                              }`}
                             >
                               {col.type === "individual" ? (
                                 isHead ? (
@@ -725,10 +754,7 @@ function TeamsTable({
                                     absentMembers[team._id]?.[member] !==
                                     undefined
                                       ? absentMembers[team._id][member]
-                                      : isAbsentFromSavedData(
-                                          team._id,
-                                          member
-                                        )
+                                      : isAbsentFromSavedData(team._id, member)
                                   ) ? (
                                     <span className="text-gray-500 italic">
                                       Absent
@@ -780,7 +806,8 @@ function TeamsTable({
                                         min="0"
                                         max={col.maxMarks || undefined}
                                         value={
-                                          getDisplayValue(team, col, member) || ""
+                                          getDisplayValue(team, col, member) ||
+                                          ""
                                         }
                                         onChange={(e) =>
                                           updateMemberScore(
@@ -801,7 +828,8 @@ function TeamsTable({
                                       <input
                                         type="text"
                                         value={
-                                          getDisplayValue(team, col, member) || ""
+                                          getDisplayValue(team, col, member) ||
+                                          ""
                                         }
                                         onChange={(e) =>
                                           updateMemberScore(
