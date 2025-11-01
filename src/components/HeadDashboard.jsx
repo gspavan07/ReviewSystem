@@ -19,6 +19,7 @@ import {
   FaTimes,
   FaCheck,
   FaFileAlt,
+  FaTachometerAlt,
 } from "react-icons/fa";
 
 function HeadDashboard({
@@ -28,7 +29,7 @@ function HeadDashboard({
   onLogout,
   onDataChange,
 }) {
-  const [activeTab, setActiveTab] = useState("teams-overview");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [columnName, setColumnName] = useState("");
   const [columnType, setColumnType] = useState("team");
   const [inputType, setInputType] = useState("text");
@@ -85,6 +86,7 @@ function HeadDashboard({
   const [importProgress, setImportProgress] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isSendingEmails, setIsSendingEmails] = useState(false);
+  const [selectedDashboardSection, setSelectedDashboardSection] = useState("");
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -1249,6 +1251,279 @@ function HeadDashboard({
 
   const renderContent = () => {
     switch (activeTab) {
+      case "dashboard":
+        return (
+          <div className="bg-white p-8 rounded-xl shadow-lg">
+            <h3 className="text-2xl font-bold text-gray-800 mb-6">
+              Analytics Dashboard
+            </h3>
+
+            {/* Key Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-lg text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-100 text-sm">Total Teams</p>
+                    <p className="text-3xl font-bold">{teams.length}</p>
+                  </div>
+                  <FaUsers className="text-4xl text-blue-200" />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-lg text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100 text-sm">Total Students</p>
+                    <p className="text-3xl font-bold">
+                      {teams.reduce((total, team) => total + team.members.split(',').length, 0)}
+                    </p>
+                  </div>
+                  <FaUserFriends className="text-4xl text-green-200" />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-lg text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100 text-sm">Active Review</p>
+                    <p className="text-lg font-bold">
+                      {activeReview ? activeReview.name : 'None'}
+                    </p>
+                  </div>
+                  <FaClipboardList className="text-4xl text-purple-200" />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6 rounded-lg text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-orange-100 text-sm">Submissions</p>
+                    <p className="text-3xl font-bold">{submissions.length}</p>
+                  </div>
+                  <FaUpload className="text-4xl text-orange-200" />
+                </div>
+              </div>
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Review Status Pie Chart */}
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-semibold text-gray-700">Review Status</h4>
+                  <select
+                    value={selectedDashboardSection || getTeamSections()[0] || ""}
+                    onChange={(e) => setSelectedDashboardSection(e.target.value)}
+                    className="px-3 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {getTeamSections().map(section => (
+                      <option key={section} value={section}>Section {section}</option>
+                    ))}
+                  </select>
+                </div>
+                {activeReview ? (() => {
+                  const currentSection = selectedDashboardSection || getTeamSections()[0];
+                  const filteredTeams = teams.filter(team => 
+                    team.name.replace('Batch ', '').charAt(0).toUpperCase() === currentSection
+                  );
+                  
+                  const completedTeams = filteredTeams.filter(team => 
+                    team.reviewData?.[activeReview._id]?._submittedBy
+                  ).length;
+                  const pendingTeams = filteredTeams.length - completedTeams;
+                  const completedPercentage = filteredTeams.length > 0 ? (completedTeams / filteredTeams.length) * 100 : 0;
+                  const pendingPercentage = 100 - completedPercentage;
+                  
+                  return (
+                    <div className="flex items-center justify-center">
+                      <div className="relative w-40 h-40">
+                        <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 42 42">
+                          <circle
+                            cx="21"
+                            cy="21"
+                            r="15.915"
+                            fill="transparent"
+                            stroke="#ef4444"
+                            strokeWidth="3"
+                            strokeDasharray={`${pendingPercentage} ${100 - pendingPercentage}`}
+                            strokeDashoffset="25"
+                          />
+                          <circle
+                            cx="21"
+                            cy="21"
+                            r="15.915"
+                            fill="transparent"
+                            stroke="#22c55e"
+                            strokeWidth="3"
+                            strokeDasharray={`${completedPercentage} ${100 - completedPercentage}`}
+                            strokeDashoffset={`${25 - pendingPercentage}`}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-800">{completedPercentage.toFixed(1)}%</div>
+                            <div className="text-xs text-gray-600">Complete</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ml-6 space-y-2">
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 bg-green-500 rounded mr-2"></div>
+                          <span className="text-sm text-gray-700">Completed: {completedTeams}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 bg-red-500 rounded mr-2"></div>
+                          <span className="text-sm text-gray-700">Pending: {pendingTeams}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                          Total: {filteredTeams.length} teams
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="text-center text-gray-500 py-8">
+                    <FaInfoCircle className="text-4xl mb-2 mx-auto" />
+                    <p>No active review</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Review Progress Chart */}
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <h4 className="text-lg font-semibold text-gray-700 mb-4">Review Progress</h4>
+                {activeReview ? (
+                  <div className="space-y-4">
+                    {(() => {
+                      const submittedTeams = teams.filter(team => 
+                        team.reviewData?.[activeReview._id]?._submittedBy
+                      ).length;
+                      const pendingTeams = teams.length - submittedTeams;
+                      const submittedPercentage = teams.length > 0 ? (submittedTeams / teams.length) * 100 : 0;
+                      
+                      return (
+                        <>
+                          <div className="text-center mb-4">
+                            <div className="text-3xl font-bold text-gray-800">{submittedPercentage.toFixed(1)}%</div>
+                            <div className="text-sm text-gray-600">Completed</div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-green-600">Submitted: {submittedTeams}</span>
+                              <span className="text-red-600">Pending: {pendingTeams}</span>
+                            </div>
+                            <div className="bg-gray-200 rounded-full h-4">
+                              <div 
+                                className="bg-green-500 h-4 rounded-full transition-all duration-300"
+                                style={{ width: `${submittedPercentage}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()
+                    }
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <FaInfoCircle className="text-4xl mb-2 mx-auto" />
+                    <p>No active review</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Score Analytics */}
+            {activeReview && customColumns.filter(col => col.inputType === 'number').length > 0 && (
+              <div className="bg-gray-50 p-6 rounded-lg mb-8">
+                <h4 className="text-lg font-semibold text-gray-700 mb-4">Score Analytics</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {customColumns.filter(col => col.inputType === 'number').map(column => {
+                    const scores = [];
+                    teams.forEach(team => {
+                      if (column.type === 'team') {
+                        const value = team.reviewData?.[activeReview._id]?.[column.name];
+                        if (value && !isNaN(parseFloat(value))) {
+                          scores.push(parseFloat(value));
+                        }
+                      } else {
+                        const members = team.members.split(',').map(m => m.trim());
+                        members.forEach(member => {
+                          const value = team.reviewData?.[activeReview._id]?.[column.name]?.[member];
+                          if (value && !isNaN(parseFloat(value))) {
+                            scores.push(parseFloat(value));
+                          }
+                        });
+                      }
+                    });
+                    
+                    const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) : 0;
+                    const max = scores.length > 0 ? Math.max(...scores) : 0;
+                    const min = scores.length > 0 ? Math.min(...scores) : 0;
+                    
+                    return (
+                      <div key={column.name} className="bg-white p-4 rounded-lg border">
+                        <h5 className="font-medium text-gray-800 mb-2">{column.name}</h5>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Average:</span>
+                            <span className="font-medium">{avg}{column.maxMarks ? `/${column.maxMarks}` : ''}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Highest:</span>
+                            <span className="font-medium text-green-600">{max}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Lowest:</span>
+                            <span className="font-medium text-red-600">{min}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Entries:</span>
+                            <span className="font-medium">{scores.length}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recent Activity */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h4 className="text-lg font-semibold text-gray-700 mb-4">Recent Activity</h4>
+              <div className="space-y-3">
+                {submissions.slice(-5).reverse().map(submission => (
+                  <div key={submission._id} className="flex items-center justify-between bg-white p-3 rounded border">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                        <FaUpload className="text-blue-600 text-sm" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">
+                          {submission.batchName} uploaded {submission.requirementId?.title || 'file'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(submission.uploadedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                      Completed
+                    </span>
+                  </div>
+                ))}
+                {submissions.length === 0 && (
+                  <div className="text-center text-gray-500 py-8">
+                    <FaInfoCircle className="text-4xl mb-2 mx-auto" />
+                    <p>No recent activity</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
       case "team-management":
         return (
           <div className="bg-white p-8 rounded-xl shadow-lg">
@@ -3060,6 +3335,16 @@ function HeadDashboard({
         </div>
 
         <nav className="flex-1 py-6">
+          <button
+            className={`w-full px-6 py-3 text-left flex items-center gap-3 transition-colors ${
+              activeTab === "dashboard"
+                ? "bg-gray-700 text-white border-r-3 border-blue-500"
+                : "text-gray-300 hover:bg-gray-700 hover:text-white"
+            }`}
+            onClick={() => setActiveTab("dashboard")}
+          >
+            <FaTachometerAlt /> Dashboard
+          </button>
           <button
             className={`w-full px-6 py-3 text-left flex items-center gap-3 transition-colors ${
               activeTab === "teams-overview"
